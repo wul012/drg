@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}测试中心 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>测试用例中心</h1>
+        <p>测试用例会基于当前项目上下文生成并存入数据库。</p>
+    </div>
+    <div class="topbar-actions">
+        <form method="post">
+            <button class="button-secondary" type="submit">重新生成用例</button>
+        </form>
+        <a class="button" href="{{ url_for('submit_page') }}">进入提交中心</a>
+    </div>
+</header>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>测试用例列表</h3>
+        <span class="status-tag">共 {{ test_cases|length }} 条</span>
+    </div>
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>编号</th>
+                <th>功能点</th>
+                <th>前置条件</th>
+                <th>测试步骤</th>
+                <th>预期结果</th>
+                <th>优先级</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in test_cases %}
+                <tr>
+                    <td>{{ item['case_code'] }}</td>
+                    <td>{{ item['feature'] }}</td>
+                    <td>{{ item['precondition_text'] }}</td>
+                    <td>{{ item['steps_text'] }}</td>
+                    <td>{{ item['expected_text'] }}</td>
+                    <td><span class="status-tag {% if item['priority'] == '高' %}danger{% endif %}">{{ item['priority'] }}</span></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

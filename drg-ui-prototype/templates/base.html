@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}医保DRG智能协同平台{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand-block">
+            <h2 class="brand-title">DRG 协同平台</h2>
+            <p class="brand-subtitle">Flask + SQLite 完整项目，支持桌面端与移动端协同。</p>
+        </div>
+        <nav class="nav-list">
+            <a class="nav-item {% if page_key == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span>工作台</span><span>01</span></a>
+            <a class="nav-item {% if page_key == 'analysis' %}active{% endif %}" href="{{ url_for('analysis') }}"><span>需求分析</span><span>02</span></a>
+            <a class="nav-item {% if page_key == 'cases' %}active{% endif %}" href="{{ url_for('cases_page') }}"><span>DRG分析</span><span>03</span></a>
+            <a class="nav-item {% if page_key == 'agents' %}active{% endif %}" href="{{ url_for('agents_page') }}"><span>Agent协作</span><span>04</span></a>
+            <a class="nav-item {% if page_key == 'documents' %}active{% endif %}" href="{{ url_for('documents_page') }}"><span>文档中心</span><span>05</span></a>
+            <a class="nav-item {% if page_key == 'tests' %}active{% endif %}" href="{{ url_for('tests_page') }}"><span>测试用例</span><span>06</span></a>
+            <a class="nav-item {% if page_key == 'submit' %}active{% endif %}" href="{{ url_for('submit_page') }}"><span>提交中心</span><span>07</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-mini-card">
+                <strong>{{ current_user['username'] if current_user else '访客' }}</strong>
+                <span>{{ current_user['role'] if current_user else '未登录' }}</span>
+            </div>
+            <a class="button-secondary full" href="{{ url_for('mobile_home') }}">移动端视图</a>
+            <a class="button-ghost full" href="{{ url_for('index') }}">返回首页</a>
+            <a class="button-danger full" href="{{ url_for('logout') }}">退出登录</a>
+        </div>
+    </aside>
+    <main class="main-content">
+        {% include '_flashes.html' %}
+        {% block content %}{% endblock %}
+    </main>
+</div>
+</body>
+</html>

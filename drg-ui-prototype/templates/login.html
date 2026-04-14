@@ -1,0 +1,41 @@
+{% extends 'public_base.html' %}
+
+{% block title %}登录 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<section class="auth-shell">
+    <div class="auth-panel auth-panel-main">
+        <span class="badge">完整项目登录入口</span>
+        <h1>登录协同平台</h1>
+        <p>登录后可进入桌面端工作台、需求分析、DRG分析、Agent协作、文档中心、测试中心和提交中心。</p>
+        <form class="form-grid" method="post">
+            <div class="field">
+                <label for="username">用户名</label>
+                <input class="input" id="username" name="username" type="text" placeholder="请输入用户名" value="admin" required />
+            </div>
+            <div class="field">
+                <label for="password">密码</label>
+                <input class="input" id="password" name="password" type="password" placeholder="请输入密码" value="123456" required />
+            </div>
+            <div class="form-actions">
+                <button class="button full" type="submit">登录并进入系统</button>
+                <a class="button-secondary full" href="{{ url_for('register') }}">注册新账号</a>
+            </div>
+        </form>
+    </div>
+    <div class="auth-panel auth-panel-side">
+        <h3>默认演示账号</h3>
+        <p><code>admin / 123456</code></p>
+        <p><code>doctor / 123456</code></p>
+        <p><code>analyst / 123456</code></p>
+        <div class="info-list" style="margin-top: 18px;">
+            <div class="info-row"><strong>技术路线</strong><span>Flask + SQLite</span></div>
+            <div class="info-row"><strong>页面形态</strong><span>桌面端 + 响应式移动端</span></div>
+            <div class="info-row"><strong>核心能力</strong><span>分析、协作、文档、提交</span></div>
+        </div>
+        <div class="hero-actions" style="margin-top: 18px;">
+            <a class="button-ghost" href="{{ url_for('index') }}">返回首页</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

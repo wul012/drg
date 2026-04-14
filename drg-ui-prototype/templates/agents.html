@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Agent协作 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>多 Agent 协作监控</h1>
+        <p>这里展示系统中真实保存在数据库里的 Agent 状态和桌面端 / 移动端消息流。</p>
+    </div>
+    <div class="topbar-actions">
+        <a class="button-secondary" href="{{ url_for('documents_page') }}">进入文档中心</a>
+    </div>
+</header>
+
+<section class="board-grid">
+    <article class="panel">
+        <div class="panel-header"><h3>Agent 列表</h3></div>
+        <div class="list-stack">
+            {% for item in agents %}
+                <div class="item-card">
+                    <div class="item-card-top wrap-top">
+                        <div>
+                            <strong>{{ item['name'] }}</strong>
+                            <p>{{ item['owner'] }}</p>
+                        </div>
+                        <span class="status-tag {% if item['status'] == '已完成' %}success{% elif item['status'] == '运行中' %}warning{% endif %}">{{ item['status'] }}</span>
+                    </div>
+                    <p>{{ item['focus'] }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header"><h3>消息流 / 通信记录</h3></div>
+        <div class="list-stack">
+            {% for item in messages %}
+                <div class="item-card">
+                    <div class="item-card-top wrap-top">
+                        <strong>{{ item['sender'] }} → {{ item['receiver'] }}</strong>
+                        <span class="status-tag">{{ item['source'] }} · {{ item['created_at'] }}</span>
+                    </div>
+                    <p>{{ item['content'] }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header"><h3>当前任务详情</h3></div>
+        <div class="info-list">
+            <div class="info-row"><strong>项目名称</strong><span>{{ project['name'] }}</span></div>
+            <div class="info-row"><strong>当前阶段</strong><span>{{ project['phase'] }}</span></div>
+            <div class="info-row"><strong>负责人</strong><span>{{ project['owner_name'] }}</span></div>
+            <div class="info-row"><strong>目标产物</strong><span>{{ project['target'] }}</span></div>
+        </div>
+        <div class="form-actions" style="margin-top: 20px;">
+            <a class="button full" href="{{ url_for('documents_page') }}">查看文档并继续</a>
+        </div>
+    </article>
+</section>
+{% endblock %}

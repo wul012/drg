@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}提交中心 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>虚拟文档系统提交中心</h1>
+        <p>在这里完成文档勾选、批次生成和提交留痕。</p>
+    </div>
+    <div class="topbar-actions">
+        <span class="badge">主流程终点</span>
+    </div>
+</header>
+
+<section class="step-grid">
+    <article class="step-card active-step"><strong>1</strong><span>选择文档</span></article>
+    <article class="step-card active-step"><strong>2</strong><span>确认提交</span></article>
+    <article class="step-card active-step"><strong>3</strong><span>写入记录</span></article>
+</section>
+
+<section class="panel-grid two-columns">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>待提交文档清单</h3>
+        </div>
+        <form method="post" class="form-grid">
+            <div class="list-stack">
+                {% for item in documents %}
+                    <label class="item-card checkbox-card">
+                        <span>
+                            <strong>{{ item['title'] }}</strong>
+                            <small>{{ item['version'] }} · {{ item['updated_at'] }} · {{ item['status'] }}</small>
+                        </span>
+                        <input type="checkbox" name="document_ids" value="{{ item['id'] }}" checked />
+                    </label>
+                {% endfor %}
+            </div>
+            <div class="form-actions">
+                <button class="button" type="submit">确认提交</button>
+            </div>
+        </form>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <h3>历史提交记录</h3>
+        </div>
+        <div class="list-stack">
+            {% for item in submissions %}
+                <div class="item-card">
+                    <div class="item-card-top wrap-top">
+                        <strong>{{ item['batch_name'] }}</strong>
+                        <span class="status-tag {% if item['status'] == '已提交' %}success{% else %}warning{% endif %}">{{ item['status'] }}</span>
+                    </div>
+                    <p>操作人：{{ item['operator_name'] }}</p>
+                    <p>文档数：{{ item['docs_count'] }} · 提交时间：{{ item['submitted_at'] }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

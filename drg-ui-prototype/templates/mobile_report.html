@@ -1,0 +1,38 @@
+{% extends 'mobile_base.html' %}
+
+{% block title %}移动端上报 - 医保DRG智能协同平台{% endblock %}
+{% block mobile_title %}需求快速上报{% endblock %}
+{% block mobile_subtitle %}上报成功后，PC端 Agent 消息流会同步新增记录。{% endblock %}
+
+{% block mobile_content %}
+<section class="mobile-card-grid">
+    <article class="mobile-surface-card">
+        <h3>项目信息</h3>
+        <p>{{ project['name'] }}</p>
+        <p>当前阶段：{{ project['phase'] }}</p>
+    </article>
+    <article class="mobile-surface-card">
+        <form method="post" class="form-grid">
+            <div class="field">
+                <label for="title">上报标题</label>
+                <input class="input" id="title" name="title" type="text" placeholder="例如：新增病例录入需求" required />
+            </div>
+            <div class="field">
+                <label for="content">上报内容</label>
+                <textarea class="textarea" id="content" name="content" placeholder="请输入需要同步到PC端的内容" required></textarea>
+            </div>
+            <div class="field">
+                <label for="priority">优先级</label>
+                <select class="input" id="priority" name="priority">
+                    <option value="高">高</option>
+                    <option value="中">中</option>
+                    <option value="低">低</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="button full" type="submit">提交上报</button>
+            </div>
+        </form>
+    </article>
+</section>
+{% endblock %}

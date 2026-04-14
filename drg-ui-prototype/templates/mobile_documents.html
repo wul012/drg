@@ -1,0 +1,46 @@
+{% extends 'mobile_base.html' %}
+
+{% block title %}移动端文档 - 医保DRG智能协同平台{% endblock %}
+{% block mobile_title %}文档与提交结果{% endblock %}
+{% block mobile_subtitle %}移动端只展示概要状态，完整内容可回到PC端文档中心查看。{% endblock %}
+
+{% block mobile_content %}
+<section class="mobile-card-grid">
+    <article class="mobile-surface-card">
+        <h3>最新文档</h3>
+        <div class="list-stack compact-stack">
+            {% for item in documents %}
+                <div class="item-card">
+                    <div class="item-card-top wrap-top">
+                        <strong>{{ item['title'] }}</strong>
+                        <span class="status-tag {% if item['status'] == '已生成' or item['status'] == '已提交' %}success{% elif item['status'] == '待更新' %}warning{% endif %}">{{ item['status'] }}</span>
+                    </div>
+                    <p>{{ item['version'] }} · {{ item['updated_at'] }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+    <article class="mobile-surface-card">
+        <h3>最近提交</h3>
+        <div class="list-stack compact-stack">
+            {% for item in submissions[:3] %}
+                <div class="item-card simple-item-card">
+                    {{ item['batch_name'] }} · {{ item['status'] }} · {{ item['submitted_at'] }}
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+    <article class="mobile-surface-card">
+        <h3>最近移动端上报</h3>
+        <div class="list-stack compact-stack">
+            {% for item in reports[:3] %}
+                <div class="item-card">
+                    <strong>{{ item['title'] }}</strong>
+                    <p>{{ item['content'] }}</p>
+                    <small>{{ item['priority'] }} · {{ item['created_at'] }}</small>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

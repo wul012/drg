@@ -1,0 +1,28 @@
+{% extends 'mobile_base.html' %}
+
+{% block title %}移动端首页 - 医保DRG智能协同平台{% endblock %}
+{% block mobile_title %}移动端工作台{% endblock %}
+{% block mobile_subtitle %}欢迎你，{{ current_user['username'] }}。当前阶段：{{ project['phase'] }}{% endblock %}
+
+{% block mobile_content %}
+<section class="mobile-card-grid">
+    <article class="mobile-surface-card">
+        <span class="badge">当前项目</span>
+        <h3>{{ project['name'] }}</h3>
+        <p>{{ project['description'] }}</p>
+    </article>
+    <article class="mobile-stat-row">
+        <div class="mobile-stat-card"><strong>{{ stats['documents'] }}</strong><span>文档数量</span></div>
+        <div class="mobile-stat-card"><strong>{{ stats['submissions'] }}</strong><span>提交批次</span></div>
+        <div class="mobile-stat-card"><strong>{{ stats['mobile_reports'] }}</strong><span>移动上报</span></div>
+    </article>
+    <article class="mobile-surface-card">
+        <h3>今日待办</h3>
+        <div class="list-stack compact-stack">
+            {% for item in tasks %}
+                <div class="item-card simple-item-card">{{ item }}</div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

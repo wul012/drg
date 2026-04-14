@@ -1,0 +1,25 @@
+{% extends 'mobile_base.html' %}
+
+{% block title %}移动端消息 - 医保DRG智能协同平台{% endblock %}
+{% block mobile_title %}Agent 消息{% endblock %}
+{% block mobile_subtitle %}查看桌面端分析和移动端上报汇总后的消息流。{% endblock %}
+
+{% block mobile_content %}
+<section class="mobile-card-grid">
+    <article class="mobile-surface-card">
+        <h3>最新消息</h3>
+        <div class="list-stack compact-stack">
+            {% for item in messages %}
+                <div class="item-card">
+                    <div class="item-card-top wrap-top">
+                        <strong>{{ item['sender'] }}</strong>
+                        <span class="status-tag">{{ item['source'] }}</span>
+                    </div>
+                    <p>{{ item['content'] }}</p>
+                    <small>{{ item['created_at'] }}</small>
+                </div>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

@@ -1,22 +1,21 @@
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-import os
 import webbrowser
 
 HOST = "127.0.0.1"
-PORT = 8000
+PORT = 5000
 ROOT = Path(__file__).resolve().parent
 
 
 if __name__ == "__main__":
-    os.chdir(ROOT)
-    server = ThreadingHTTPServer((HOST, PORT), SimpleHTTPRequestHandler)
-    url = f"http://{HOST}:{PORT}/index.html"
-    print(f"Server running at {url}")
-    webbrowser.open(url)
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+        from app import app
+    except ModuleNotFoundError as error:
+        if error.name == "flask":
+            print("缺少依赖 Flask，请先执行: pip install -r requirements.txt")
+            raise
+        raise
+
+    url = f"http://{HOST}:{PORT}"
+    print(f"Flask app running at {url}")
+    webbrowser.open(url)
+    app.run(host=HOST, port=PORT, debug=True)

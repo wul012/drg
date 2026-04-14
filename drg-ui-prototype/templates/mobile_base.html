@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}移动端 - 医保DRG智能协同平台{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
+</head>
+<body>
+<div class="mobile-page-root">
+    <header class="mobile-topbar">
+        <div>
+            <h1>{% block mobile_title %}移动端{% endblock %}</h1>
+            <p>{% block mobile_subtitle %}移动端协同视图{% endblock %}</p>
+        </div>
+        <a class="mobile-top-link" href="{{ url_for('dashboard') }}">PC端</a>
+    </header>
+    <main class="mobile-main">
+        {% include '_flashes.html' %}
+        {% block mobile_content %}{% endblock %}
+    </main>
+    <nav class="mobile-bottom-nav">
+        <a class="{% if page_key == 'mobile_home' %}active{% endif %}" href="{{ url_for('mobile_home') }}">首页</a>
+        <a class="{% if page_key == 'mobile_report' %}active{% endif %}" href="{{ url_for('mobile_report') }}">上报</a>
+        <a class="{% if page_key == 'mobile_messages' %}active{% endif %}" href="{{ url_for('mobile_messages') }}">消息</a>
+        <a class="{% if page_key == 'mobile_documents' %}active{% endif %}" href="{{ url_for('mobile_documents') }}">文档</a>
+    </nav>
+</div>
+</body>
+</html>

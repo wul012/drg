@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}DRG分析 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>DRG规则匹配与病例分析</h1>
+        <p>这一页保留项目的业务特征，用于展示病例、DRG分组、风险等级与说明。</p>
+    </div>
+    <div class="topbar-actions">
+        <span class="badge">病例数：{{ drg_cases|length }}</span>
+    </div>
+</header>
+
+<section class="panel">
+    <div class="panel-header">
+        <h3>病例列表</h3>
+        <a class="text-link" href="{{ url_for('analysis') }}">返回需求分析</a>
+    </div>
+    <div class="list-stack spaced-stack">
+        {% for item in drg_cases %}
+            <div class="item-card">
+                <div class="item-card-top wrap-top">
+                    <div>
+                        <strong>{{ item['case_code'] }} · {{ item['patient_name'] }}</strong>
+                        <p>{{ item['diagnosis'] }}</p>
+                    </div>
+                    <span class="status-tag {% if item['status'] == '已完成' %}success{% elif item['risk_level'] == '高' %}danger{% else %}warning{% endif %}">{{ item['status'] }}</span>
+                </div>
+                <div class="info-list compact-info-list">
+                    <div class="info-row"><strong>DRG分组</strong><span>{{ item['drg_code'] }}</span></div>
+                    <div class="info-row"><strong>风险等级</strong><span>{{ item['risk_level'] }}</span></div>
+                    <div class="info-row"><strong>说明</strong><span>{{ item['note'] }}</span></div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

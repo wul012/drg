@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}文档中心 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>文档自动生成中心</h1>
+        <p>文档内容来自数据库，并会随着需求分析提交而刷新。</p>
+    </div>
+    <div class="topbar-actions">
+        <a class="button-secondary" href="{{ url_for('tests_page') }}">进入测试中心</a>
+    </div>
+</header>
+
+<section class="panel-grid two-columns documents-layout">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>文档列表</h3>
+        </div>
+        <div class="list-stack">
+            {% for item in documents %}
+                <a class="item-card linked-card {% if selected_document and selected_document['id'] == item['id'] %}active-linked-card{% endif %}" href="{{ url_for('documents_page', document_id=item['id']) }}">
+                    <div class="item-card-top wrap-top">
+                        <strong>{{ item['title'] }}</strong>
+                        <span class="status-tag {% if item['status'] == '已生成' or item['status'] == '已提交' %}success{% elif item['status'] == '待更新' %}warning{% endif %}">{{ item['status'] }}</span>
+                    </div>
+                    <p>{{ item['version'] }} · {{ item['updated_at'] }}</p>
+                </a>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="panel">
+        {% if selected_document %}
+            <div class="panel-header">
+                <div>
+                    <h3>{{ selected_document['title'] }}</h3>
+                    <p>{{ selected_document['version'] }} · {{ selected_document['updated_at'] }}</p>
+                </div>
+                <a class="button-secondary" href="{{ url_for('submit_page') }}">进入提交中心</a>
+            </div>
+            <div class="document-lines">
+                {% for line in selected_document['content_lines'] %}
+                    <div class="document-line">{{ line }}</div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">暂无文档数据。</div>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

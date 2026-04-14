@@ -1,0 +1,63 @@
+{% extends 'public_base.html' %}
+
+{% block title %}首页 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<section class="landing-shell">
+    <div class="landing-hero-grid">
+        <div class="hero-panel hero-panel-primary">
+            <span class="badge">Flask + SQLite 完整项目</span>
+            <h1>医保DRG智能协同平台</h1>
+            <p>
+                这是一个真实可运行的课程实验项目，不再是纯原型。它包含桌面端工作台、需求分析、DRG病例管理、
+                多Agent协作、文档中心、测试中心、提交中心，以及响应式移动端页面。
+            </p>
+            <div class="hero-actions">
+                {% if current_user %}
+                    <a class="button" href="{{ url_for('dashboard') }}">进入桌面端工作台</a>
+                    <a class="button-secondary" href="{{ url_for('mobile_home') }}">进入移动端视图</a>
+                {% else %}
+                    <a class="button" href="{{ url_for('login') }}">登录系统</a>
+                    <a class="button-secondary" href="{{ url_for('register') }}">注册账号</a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="hero-panel hero-panel-light">
+            <h3>项目概览</h3>
+            <div class="info-list">
+                <div class="info-row"><strong>项目名称</strong><span>{{ project['name'] }}</span></div>
+                <div class="info-row"><strong>当前阶段</strong><span>{{ project['phase'] }}</span></div>
+                <div class="info-row"><strong>文档数量</strong><span>{{ doc_count }}</span></div>
+                <div class="info-row"><strong>提交批次</strong><span>{{ submission_count }}</span></div>
+                <div class="info-row"><strong>移动端上报</strong><span>{{ report_count }}</span></div>
+                <div class="info-row"><strong>病例数量</strong><span>{{ case_count }}</span></div>
+            </div>
+            <div class="demo-account-card">
+                <h4>默认演示账号</h4>
+                <p>管理员：<code>admin / 123456</code></p>
+                <p>医生：<code>doctor / 123456</code></p>
+                <p>分析员：<code>analyst / 123456</code></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="feature-grid">
+        <article class="feature-card">
+            <h3>桌面端完整业务流</h3>
+            <p>登录 -> 工作台 -> 需求分析 -> DRG分析 -> Agent协作 -> 文档中心 -> 测试中心 -> 提交中心。</p>
+        </article>
+        <article class="feature-card">
+            <h3>真实数据存储</h3>
+            <p>项目数据、分析结果、文档、消息、测试用例和提交记录全部落到 SQLite 数据库。</p>
+        </article>
+        <article class="feature-card">
+            <h3>响应式移动端</h3>
+            <p>移动端页面不再使用手机壳原型框，而是直接采用真实移动端布局和底部导航。</p>
+        </article>
+        <article class="feature-card">
+            <h3>课程实验核心能力</h3>
+            <p>覆盖登录、需求分析、多Agent协作、文档生成、测试用例和提交流程等关键要求。</p>
+        </article>
+    </div>
+</section>
+{% endblock %}

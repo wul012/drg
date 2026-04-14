@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}需求分析 - 医保DRG智能协同平台{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div>
+        <h1>项目需求分析</h1>
+        <p>这里会把项目需求真正写入数据库，并联动更新文档、Agent与测试中心。</p>
+    </div>
+    <div class="topbar-actions">
+        <span class="badge">主流程第一站</span>
+    </div>
+</header>
+
+<section class="panel-grid two-columns">
+    <article class="panel">
+        <div class="panel-header">
+            <h3>需求录入区</h3>
+        </div>
+        <form class="form-grid" method="post">
+            <div class="field">
+                <label for="project_name">项目名称</label>
+                <input class="input" id="project_name" name="project_name" type="text" value="{{ project['name'] }}" required />
+            </div>
+            <div class="field">
+                <label for="description">业务描述</label>
+                <textarea class="textarea" id="description" name="description" required>{{ project['description'] }}</textarea>
+            </div>
+            <div class="field">
+                <label for="target">目标产物</label>
+                <textarea class="textarea" id="target" name="target" required>{{ project['target'] }}</textarea>
+            </div>
+            <div class="form-row two-columns-row">
+                <div class="field">
+                    <label for="priority">优先级</label>
+                    <select class="input" id="priority" name="priority">
+                        <option value="高" {% if project['priority'] == '高' %}selected{% endif %}>高</option>
+                        <option value="中" {% if project['priority'] == '中' %}selected{% endif %}>中</option>
+                        <option value="低" {% if project['priority'] == '低' %}selected{% endif %}>低</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="doc_type">目标文档类型</label>
+                    <select class="input" id="doc_type" name="doc_type">
+                        <option value="需求分析文档">需求分析文档</option>
+                        <option value="架构设计文档">架构设计文档</option>
+                        <option value="测试用例文档">测试用例文档</option>
+                        <option value="完整提交包">完整提交包</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="button" type="submit">开始分析并同步数据</button>
+                <a class="button-secondary" href="{{ url_for('agents_page') }}">进入 Agent 协作</a>
+            </div>
+        </form>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header">
+            <h3>分析结果区</h3>
+            <span class="status-tag">更新时间：{{ analysis['updated_at'] }}</span>
+        </div>
+        <div class="result-grid">
+            <div class="item-card">
+                <h4>需求摘要</h4>
+                <ul class="data-list">
+                    {% for item in analysis['summary'] %}
+                        <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="item-card">
+                <h4>模块建议</h4>
+                <ul class="data-list">
+                    {% for item in analysis['modules'] %}
+                        <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="item-card">
+                <h4>风险识别</h4>
+                <ul class="data-list">
+                    {% for item in analysis['risks'] %}
+                        <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="item-card">
+                <h4>推荐动作</h4>
+                <ul class="data-list">
+                    {% for item in analysis['recommendations'] %}
+                        <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </article>
+</section>
+{% endblock %}
