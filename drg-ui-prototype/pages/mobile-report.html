@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>移动端上报 - 医保DRG智能协同平台</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script defer src="../js/main.js"></script>
+</head>
+<body data-page="mobile-report">
+<div class="mobile-page">
+    <div class="mobile-shell">
+        <div class="mobile-header">
+            <h1>需求快速上报</h1>
+            <p>移动端上报后，PC端 Agent 消息流会同步新增记录。</p>
+        </div>
+        <div class="mobile-body">
+            <form class="form-grid" id="mobileReportForm">
+                <div class="field">
+                    <label for="mobileReportProject">项目名称</label>
+                    <input class="input" id="mobileReportProject" type="text" readonly />
+                </div>
+                <div class="field">
+                    <label for="mobileReportTitle">上报标题</label>
+                    <input class="input" id="mobileReportTitle" type="text" placeholder="例如：新增病例录入需求" />
+                </div>
+                <div class="field">
+                    <label for="mobileReportContent">上报内容</label>
+                    <textarea class="textarea" id="mobileReportContent" placeholder="请输入需要同步给PC端工作台和Agent协作页的内容"></textarea>
+                </div>
+                <div class="field">
+                    <label for="mobileReportPriority">优先级</label>
+                    <select class="select" id="mobileReportPriority">
+                        <option value="高">高</option>
+                        <option value="中">中</option>
+                        <option value="低">低</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="button full" type="submit">提交上报</button>
+                </div>
+                <div class="notice" id="mobileReportFeedback">提交后返回消息页查看同步结果。</div>
+            </form>
+        </div>
+        <nav class="mobile-nav">
+            <a href="mobile-home.html">首页</a>
+            <a class="active" href="mobile-report.html">上报</a>
+            <a href="mobile-messages.html">消息</a>
+            <a href="mobile-docs.html">文档</a>
+        </nav>
+    </div>
+</div>
+</body>
+</html>

@@ -1,155 +1,344 @@
-/*
- * =====================================================================================
- *
- *       Filename:  main.cpp
- *
- *    Description:  这是一个用于测试选择排序算法的程序。
- *                  它会生成大量随机数组，然后分别用我们自己实现的
- *                  selectionSort 和标准库的 std::sort 进行排序，
- *                  最后比对两个排序结果是否一致，以此来验证我们算法的正确性。
- *
- * =====================================================================================
- */
-
+#include <cassert>
 #include <iostream>
+#include <string>
 #include <vector>
-#include <algorithm> // 包含了 std::sort
-#include <ctime>     // 包含了 time()，用于生成随机数种子
-#include <cstdlib>   // 包含了 rand() 和 srand()
-#include "mergeSort.h"
+
+#include "morris.h"
+#include "coins_min.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
-/*
- * =====================================================================================
- * 关于为什么不使用 "using namespace std;"
- * =====================================================================================
- *
- * 在这个项目中，我们所有的标准库功能都带有 "std::" 前缀，例如 std::cout, std::vector。
- * 我们没有在文件开头写 "using namespace std;"，这是一种推荐的编程习惯，原因如下：
- *
- * 1. 避免命名冲突 (Name Ambiguity):
- *    `std` 命名空间包含了大量常见的名称（如 sort, find, count, string, list 等）。
- *    如果你自己的代码中也定义了同名函数或变量，或者引入了另一个也定义了同名函数的
- *    第三方库，就会导致命名冲突，编译器不知道你到底想用哪一个，从而产生编译错误。
- *    例如，如果你自己实现了一个 sort 函数，`sort(arr)` 的调用就会有歧义。
- *
- * 2. 提高代码清晰度和可读性 (Clarity and Readability):
- *    当代码中明确写作 std::sort 时，任何阅读代码的人都能立刻明白这里调用的是 C++
- *    标准库的排序函数，而不是某个自定义函数。这种明确性对于代码的长期维护至关重要。
- *
- * 3. 避免污染头文件 (Header File Pollution):
- *    在头文件(.h)中使用 "using namespace std;" 是极其危险的。因为任何包含了这个
- *    头文件的源文件，都会被迫引入整个 `std` 命名空间，极大地增加了在整个项目中
- *    出现命名冲突的风险。
- *
- * 总结：坚持使用 `std::` 前缀是一种更安全、更专业、更易于维护的编程习惯。
- */
+// ============================================================================
+//                    Morris 遍历测试说明（入门友好）
+// ============================================================================
+// 目标：验证 Morris 遍历算法的核心接口：
+// - `morris::preorderMorris(root)` 返回前序遍历结果
+// - `morris::inorderMorris(root)` 返回中序遍历结果
+// - `morris::postorderMorris(root)` 返回后序遍历结果
+// - `morris::buildTree(arr)` 从数组构建二叉树
+//
+// 测试用例的树结构：
+//
+// 测试树1：
+//       1
+//      / \
+//     2   3
+//    / \
+//   4   5
+//
+// 测试树2：
+//       1
+//        \
+//         2
+//        /
+//       3
+//
+// 测试树3（完全二叉树）：
+//         1
+//       /   \
+//      2     3
+//     / \   / \
+//    4   5 6   7
+// ============================================================================
 
+// ============================================================================
+//                    硬币问题测试说明（入门友好）
+// ============================================================================
+// 目标：验证硬币问题算法的核心接口：
+// - `coins_min::minCoinsRecursive(arr, amount)` 暴力递归方法
+// - `coins_min::minCoinsDp(arr, amount)` 动态规划方法
+//
+// 测试用例说明：
+// 1. 基本测试：常见硬币组合
+// 2. 边界测试：空数组、金额为0、无法凑成
+// 3. 对拍测试：递归和DP结果一致性
+// ============================================================================
 
-// 函数：打印一个整型向量的所有元素
-void printVector(const std::vector<int>& arr) {
-    for (int num : arr) {
-        std::cout << num << " ";
+void testCoinsMin() {
+    using coins_min::minCoinsRecursive;
+    using coins_min::minCoinsDp;
+
+    // ========================================================================
+    // 测试1：经典案例 - LeetCode 322 示例
+    // ========================================================================
+    // arr = [1, 2, 5], amount = 11
+    // 最少硬币：5 + 5 + 1 = 11，需要 3 枚
+    {
+        std::vector<int> coins = {1, 2, 5};
+        assert(minCoinsRecursive(coins, 11) == 3);
+        assert(minCoinsDp(coins, 11) == 3);
     }
-    std::cout << std::endl;
-}
 
-// 对照组函数：使用 C++ 标准库提供的 std::sort 进行排序
-// 它的功能是绝对正确的，我们可以用它来检验我们自己写的排序算法是否正确。
-void comparator(std::vector<int>& arr) {
-    std::sort(arr.begin(), arr.end());
-}
-
-// 函数：生成一个随机长度、随机元素的整型向量
-// @param maxSize 向量的最大可能长度
-// @param maxValue 向量中元素的最大可能值
-std::vector<int> generateRandomVector(int maxSize, int maxValue) {
-    // 随机生成数组长度，范围在 [0, maxSize]
-    int size = rand() % (maxSize + 1);
-    std::vector<int> arr(size);
-    for (int i = 0; i < size; i++) {
-        // 随机生成元素值，范围大致在 [-maxValue, maxValue]
-        arr[i] = rand() % (maxValue + 1) - rand() % (maxValue);
+    // ========================================================================
+    // 测试2：无法凑成的情况
+    // ========================================================================
+    // arr = [2], amount = 3
+    // 只有面值2的硬币，无法凑成3
+    {
+        std::vector<int> coins = {2};
+        assert(minCoinsRecursive(coins, 3) == -1);
+        assert(minCoinsDp(coins, 3) == -1);
     }
-    return arr;
-}
 
-// 函数：比较两个向量是否完全相等（长度和所有对应元素都相等）
-bool areVectorsEqual(const std::vector<int>& arr1, const std::vector<int>& arr2) {
-    if (arr1.size() != arr2.size()) {
-        return false;
+    // ========================================================================
+    // 测试3：金额为0
+    // ========================================================================
+    // 不需要任何硬币
+    {
+        std::vector<int> coins = {1, 2, 5};
+        assert(minCoinsRecursive(coins, 0) == 0);
+        assert(minCoinsDp(coins, 0) == 0);
     }
-    for (size_t i = 0; i < arr1.size(); i++) {
-        if (arr1[i] != arr2[i]) {
-            return false;
+
+    // ========================================================================
+    // 测试4：空硬币数组
+    // ========================================================================
+    {
+        std::vector<int> coins = {};
+        assert(minCoinsRecursive(coins, 5) == -1);
+        assert(minCoinsDp(coins, 5) == -1);
+    }
+
+    // ========================================================================
+    // 测试5：单个硬币恰好等于金额
+    // ========================================================================
+    {
+        std::vector<int> coins = {5};
+        assert(minCoinsRecursive(coins, 5) == 1);
+        assert(minCoinsDp(coins, 5) == 1);
+    }
+
+    // ========================================================================
+    // 测试6：需要选择最优方案
+    // ========================================================================
+    // arr = [1, 3, 4], amount = 6
+    // 贪心会选 4+1+1=6（3枚），但最优是 3+3=6（2枚）
+    {
+        std::vector<int> coins = {1, 3, 4};
+        assert(minCoinsRecursive(coins, 6) == 2);
+        assert(minCoinsDp(coins, 6) == 2);
+    }
+
+    // ========================================================================
+    // 测试7：较大金额
+    // ========================================================================
+    // arr = [1, 2, 5], amount = 100
+    // 最优：20 个 5 元硬币
+    {
+        std::vector<int> coins = {1, 2, 5};
+        // 递归版本对于大金额可能较慢，主要测试 DP 版本
+        assert(minCoinsDp(coins, 100) == 20);
+    }
+
+    // ========================================================================
+    // 测试8：对拍测试 - 递归和DP结果一致性
+    // ========================================================================
+    {
+        std::vector<int> coins = {2, 3, 7};
+        for (int amount = 0; amount <= 20; ++amount) {
+            int recursive_result = minCoinsRecursive(coins, amount);
+            int dp_result = minCoinsDp(coins, amount);
+            assert(recursive_result == dp_result);
         }
     }
-    return true;
+
+    // ========================================================================
+    // 测试9：多种硬币组合
+    // ========================================================================
+    {
+        std::vector<int> coins = {1, 5, 10, 25};
+        // 30 = 25 + 5 = 2枚
+        assert(minCoinsDp(coins, 30) == 2);
+        // 31 = 25 + 5 + 1 = 3枚
+        assert(minCoinsDp(coins, 31) == 3);
+    }
+}
+
+void testMorris() {
+    using morris::TreeNode;
+    using morris::buildTree;
+    using morris::freeTree;
+    using morris::preorderMorris;
+    using morris::inorderMorris;
+    using morris::postorderMorris;
+
+    // ========================================================================
+    // 测试1：标准二叉树
+    // ========================================================================
+    //       1
+    //      / \
+    //     2   3
+    //    / \
+    //   4   5
+    {
+        TreeNode* root = buildTree({1, 2, 3, 4, 5});
+
+        // 前序遍历：根 -> 左 -> 右
+        // 期望：1 -> 2 -> 4 -> 5 -> 3
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder == std::vector<int>({1, 2, 4, 5, 3}));
+
+        // 中序遍历：左 -> 根 -> 右
+        // 期望：4 -> 2 -> 5 -> 1 -> 3
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder == std::vector<int>({4, 2, 5, 1, 3}));
+
+        // 后序遍历：左 -> 右 -> 根
+        // 期望：4 -> 5 -> 2 -> 3 -> 1
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder == std::vector<int>({4, 5, 2, 3, 1}));
+
+        freeTree(root);
+    }
+
+    // ========================================================================
+    // 测试2：只有右子树的链状树
+    // ========================================================================
+    //   1
+    //    \
+    //     2
+    //      \
+    //       3
+    {
+        TreeNode* root = buildTree({1, -1, 2, -1, 3});
+
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder == std::vector<int>({1, 2, 3}));
+
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder == std::vector<int>({1, 2, 3}));
+
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder == std::vector<int>({3, 2, 1}));
+
+        freeTree(root);
+    }
+
+    // ========================================================================
+    // 测试3：只有左子树的链状树
+    // ========================================================================
+    //       1
+    //      /
+    //     2
+    //    /
+    //   3
+    {
+        TreeNode* root = buildTree({1, 2, -1, 3});
+
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder == std::vector<int>({1, 2, 3}));
+
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder == std::vector<int>({3, 2, 1}));
+
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder == std::vector<int>({3, 2, 1}));
+
+        freeTree(root);
+    }
+
+    // ========================================================================
+    // 测试4：完全二叉树
+    // ========================================================================
+    //         1
+    //       /   \
+    //      2     3
+    //     / \   / \
+    //    4   5 6   7
+    {
+        TreeNode* root = buildTree({1, 2, 3, 4, 5, 6, 7});
+
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder == std::vector<int>({1, 2, 4, 5, 3, 6, 7}));
+
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder == std::vector<int>({4, 2, 5, 1, 6, 3, 7}));
+
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder == std::vector<int>({4, 5, 2, 6, 7, 3, 1}));
+
+        freeTree(root);
+    }
+
+    // ========================================================================
+    // 测试5：单节点树
+    // ========================================================================
+    {
+        TreeNode* root = buildTree({42});
+
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder == std::vector<int>({42}));
+
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder == std::vector<int>({42}));
+
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder == std::vector<int>({42}));
+
+        freeTree(root);
+    }
+
+    // ========================================================================
+    // 测试6：空树
+    // ========================================================================
+    {
+        TreeNode* root = buildTree({});
+
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder.empty());
+
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder.empty());
+
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder.empty());
+
+        freeTree(root);  // 对 nullptr 调用 freeTree 是安全的
+    }
+
+    // ========================================================================
+    // 测试7：之字形树
+    // ========================================================================
+    //     1
+    //      \
+    //       2
+    //      /
+    //     3
+    //      \
+    //       4
+    {
+        TreeNode* root = new TreeNode(1);
+        root->right = new TreeNode(2);
+        root->right->left = new TreeNode(3);
+        root->right->left->right = new TreeNode(4);
+
+        std::vector<int> preorder = preorderMorris(root);
+        assert(preorder == std::vector<int>({1, 2, 3, 4}));
+
+        std::vector<int> inorder = inorderMorris(root);
+        assert(inorder == std::vector<int>({1, 3, 4, 2}));
+
+        std::vector<int> postorder = postorderMorris(root);
+        assert(postorder == std::vector<int>({4, 3, 2, 1}));
+
+        freeTree(root);
+    }
 }
 
 int main() {
 #ifdef _WIN32
     // 解决 Windows 控制台输出中文乱码的问题
-    // 这行代码会将控制台的输出编码设置为 UTF-8 (代码页 65001)
     SetConsoleOutputCP(65001);
 #endif
 
-    // 初始化随机数种子，确保每次运行程序时生成的随机数序列都不同
-    srand(time(0));
+    // 运行硬币问题测试
+    testCoinsMin();
+    std::cout << "All CoinsMin tests passed" << std::endl;
 
-    // 定义测试参数
-    int testTime = 500000; // 总共要进行的测试次数
-    int maxSize = 100;     // 数组的最大长度
-    int maxValue = 100;    // 数组元素的最大值
-    bool succeed = true;   // 测试成功标志，默认为 true
-
-    // --- 主要测试循环 ---
-    // 这个循环会进行 `testTime` 次随机测试
-    for (int i = 0; i < testTime; i++) {
-        // 1. 生成一个原始的随机数组
-        std::vector<int> originalArr = generateRandomVector(maxSize, maxValue);
-        // 2. 复制两份，用于不同的排序算法
-        std::vector<int> arr1 = originalArr; // 用于归并排序
-        std::vector<int> arr2 = originalArr; // 用于标准库排序 (对照组)
-
-        // 3. 分别用两种方法进行排序
-        mergeSort::sort(arr1);     // 使用我们自己实现的 mergeSort
-        comparator(arr2);          // 使用标准库的 std::sort 作为对照
-
-        // 4. 比较排序结果
-        if (!areVectorsEqual(arr1, arr2)) {
-            // 如果归并排序的结果与标准库不一致，说明有 bug
-            succeed = false;
-            std::cout << "Oops! 排序算法出错了!" << std::endl;
-            // 打印出出错时的原始数组和各种排序的结果，方便调试
-            std::cout << "原始数组: ";
-            printVector(originalArr);
-            std::cout << "--> mergeSort 结果错误: ";
-            printVector(arr1);
-            std::cout << "正确结果 (comparator): ";
-            printVector(arr2);
-            break; // 只要有一次出错，就立即停止测试
-        }
-    }
-
-    // 根据测试结果输出最终信息
-    if (succeed) {
-        std::cout << "Nice! " << testTime << "全部通过!" << std::endl;
-    }
-
-    // --- 单次运行演示 (mergeSort) ---
-    std::cout << "\n--- 单次运行演示 (mergeSort) ---" << std::endl;
-    std::vector<int> arr = generateRandomVector(maxSize, maxValue);
-    std::cout << "排序前: ";
-    printVector(arr);
-    mergeSort::sort(arr);
-    std::cout << "排序后: ";
-    printVector(arr);
-
+    // 运行 Morris 遍历测试
+    testMorris();
+    std::cout << "All Morris traversal tests passed" << std::endl;
     return 0;
-}//
-// Created by 吴林东 on 2025/11/9.
-//
+}

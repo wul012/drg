@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>移动端登录 - 医保DRG智能协同平台</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script defer src="../js/main.js"></script>
+</head>
+<body data-page="mobile-login">
+<div class="mobile-page">
+    <div class="mobile-shell">
+        <div class="mobile-header">
+            <h1>移动端登录</h1>
+            <p>快速上报需求、查看消息和文档结果。</p>
+        </div>
+        <div class="mobile-body">
+            <div class="mobile-card">
+                <h3>课程实验二移动端</h3>
+                <p>这里展示移动端轻量协同场景，与PC端数据实时联动。</p>
+            </div>
+            <form class="form-grid" id="loginForm">
+                <div class="field">
+                    <label for="username">用户名</label>
+                    <input class="input" id="username" type="text" value="王医生" placeholder="请输入用户名" />
+                </div>
+                <div class="field">
+                    <label for="password">密码</label>
+                    <input class="input" id="password" type="password" value="123456" placeholder="请输入密码" />
+                </div>
+                <div class="field">
+                    <label for="role">角色</label>
+                    <select class="select" id="role">
+                        <option value="医生">医生</option>
+                        <option value="分析员">分析员</option>
+                        <option value="管理员">管理员</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="button full" type="submit">登录移动端</button>
+                    <a class="button-secondary full" href="../index.html">返回首页</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

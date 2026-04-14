@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>需求分析 - 医保DRG智能协同平台</title>
+    <link rel="stylesheet" href="../css/style.css" />
+    <script defer src="../js/main.js"></script>
+</head>
+<body data-page="analysis">
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand-block">
+            <h2 class="brand-title">DRG 协同平台</h2>
+            <p class="brand-subtitle">输入业务需求并生成分析结果、模块建议与风险识别。</p>
+        </div>
+        <nav class="nav-list">
+            <a class="nav-item" href="dashboard.html"><span>工作台</span><span>01</span></a>
+            <a class="nav-item active" href="analysis.html"><span>需求分析</span><span>02</span></a>
+            <a class="nav-item" href="drg.html"><span>DRG分析</span><span>03</span></a>
+            <a class="nav-item" href="agents.html"><span>Agent协作</span><span>04</span></a>
+            <a class="nav-item" href="documents.html"><span>文档中心</span><span>05</span></a>
+            <a class="nav-item" href="tests.html"><span>测试用例</span><span>06</span></a>
+            <a class="nav-item" href="submit.html"><span>提交中心</span><span>07</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="button-secondary full" href="mobile-report.html">移动端上报</a>
+            <button class="button-danger full" type="button" data-action="logout">退出登录</button>
+        </div>
+    </aside>
+    <main class="main-content">
+        <header class="topbar">
+            <div>
+                <h1>项目需求分析</h1>
+                <p>围绕当前项目生成需求摘要、模块建议、风险识别和推荐动作。</p>
+            </div>
+            <div class="topbar-actions">
+                <span class="tag">主流程第一站</span>
+            </div>
+        </header>
+
+        <section class="grid-2">
+            <article class="panel">
+                <h3>需求录入区</h3>
+                <p class="section-subtitle">填写后点击“开始分析”，系统会联动更新文档中心、测试中心和Agent协作页。</p>
+                <form class="form-grid" id="analysisForm" style="margin-top:18px;">
+                    <div class="field">
+                        <label for="projectNameInput">项目名称</label>
+                        <input class="input" id="projectNameInput" type="text" placeholder="请输入项目名称" />
+                    </div>
+                    <div class="field">
+                        <label for="descriptionInput">业务描述</label>
+                        <textarea class="textarea" id="descriptionInput" placeholder="请输入业务场景、病例处理流程或课程实验要求"></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="targetInput">目标产物</label>
+                        <textarea class="textarea" id="targetInput" placeholder="例如：输出需求分析、测试用例和提交流程"></textarea>
+                    </div>
+                    <div class="grid-2">
+                        <div class="field">
+                            <label for="priorityInput">优先级</label>
+                            <select class="select" id="priorityInput">
+                                <option value="高">高</option>
+                                <option value="中">中</option>
+                                <option value="低">低</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="docTypeInput">目标文档类型</label>
+                            <select class="select" id="docTypeInput">
+                                <option value="需求分析文档">需求分析文档</option>
+                                <option value="架构设计文档">架构设计文档</option>
+                                <option value="测试用例文档">测试用例文档</option>
+                                <option value="完整提交包">完整提交包</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="button" type="submit">开始分析</button>
+                        <button class="button-secondary" id="analysisNextButton" type="button">进入 Agent 协作</button>
+                    </div>
+                    <div class="notice" id="analysisFeedback">你可以修改输入内容后重新生成分析结果。</div>
+                </form>
+            </article>
+
+            <article class="panel">
+                <h3>分析结果区</h3>
+                <div class="kv-list" style="margin-top:16px; margin-bottom:18px;">
+                    <div class="kv-item"><strong>当前项目</strong><span id="analysisProjectName">医保DRG智能协同平台</span></div>
+                    <div class="kv-item"><strong>当前目标</strong><span id="analysisCurrentTarget">生成需求分析、测试用例与提交包</span></div>
+                </div>
+                <div class="grid-2">
+                    <div class="doc-item">
+                        <h4>需求摘要</h4>
+                        <ul id="analysisSummary" style="padding-left:20px; margin:10px 0 0;"></ul>
+                    </div>
+                    <div class="doc-item">
+                        <h4>模块建议</h4>
+                        <ul id="analysisModules" style="padding-left:20px; margin:10px 0 0;"></ul>
+                    </div>
+                    <div class="doc-item">
+                        <h4>风险识别</h4>
+                        <ul id="analysisRisks" style="padding-left:20px; margin:10px 0 0;"></ul>
+                    </div>
+                    <div class="doc-item">
+                        <h4>推荐动作</h4>
+                        <ul id="analysisRecommendations" style="padding-left:20px; margin:10px 0 0;"></ul>
+                    </div>
+                </div>
+            </article>
+        </section>
+    </main>
+</div>
+</body>
+</html>

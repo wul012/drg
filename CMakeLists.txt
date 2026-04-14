@@ -7,5 +7,14 @@ add_executable(C
         selectionSort.cpp
         quickSort.cpp
         mergeSort.cpp
+        nQueens.cpp
+        graph.cpp
+        dijkstra.cpp
+        kmp.cpp
+        manacher.cpp
+        morris.cpp
+        coins_min.cpp
         test.cpp
 )
+
+add_subdirectory(luogu)
