@@ -395,8 +395,20 @@ code {
     margin-bottom: 18px;
 }
 
+.utility-action-group {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
 .utility-switch-button {
     min-width: 132px;
+}
+
+.utility-logout-button {
+    min-width: 112px;
 }
 
 .topbar {
@@ -837,6 +849,10 @@ code {
         justify-content: flex-start;
     }
 
+    .utility-action-group {
+        justify-content: flex-start;
+    }
+
     .topbar {
         flex-direction: column;
     }
@@ -888,5 +904,11 @@ code {
         width: 100%;
         justify-content: flex-start;
         white-space: normal;
+    }
+
+    .utility-action-group,
+    .utility-switch-button,
+    .utility-logout-button {
+        width: 100%;
     }
 }

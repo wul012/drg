@@ -29,12 +29,14 @@
                 <strong>{{ current_user['username'] if current_user else '访客' }}</strong>
                 <span>{{ current_user['role'] if current_user else '未登录' }}</span>
             </div>
-            <a class="button-danger full" href="{{ url_for('logout') }}">退出登录</a>
         </div>
     </aside>
     <main class="main-content">
         <div class="main-utility-bar">
-            <a class="button-secondary utility-switch-button" href="{{ url_for('mobile_home') }}">切换到移动端</a>
+            <div class="utility-action-group">
+                <a class="button-secondary utility-switch-button" href="{{ url_for('mobile_home') }}">切换到移动端</a>
+                <a class="button-danger utility-logout-button" href="{{ url_for('logout') }}">退出登录</a>
+            </div>
         </div>
         {% include '_flashes.html' %}
         {% block content %}{% endblock %}
