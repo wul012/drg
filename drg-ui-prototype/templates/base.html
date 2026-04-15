@@ -13,6 +13,7 @@
         <div class="brand-block">
             <h2 class="brand-title">DRG 协同平台</h2>
             <p class="brand-subtitle">Flask + SQLite 完整项目，支持桌面端与移动端协同。</p>
+            <a class="brand-link" href="{{ url_for('index') }}">返回首页</a>
         </div>
         <nav class="nav-list">
             <a class="nav-item {% if page_key == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span>工作台</span><span>01</span></a>
@@ -28,12 +29,13 @@
                 <strong>{{ current_user['username'] if current_user else '访客' }}</strong>
                 <span>{{ current_user['role'] if current_user else '未登录' }}</span>
             </div>
-            <a class="button-secondary full" href="{{ url_for('mobile_home') }}">移动端视图</a>
-            <a class="button-ghost full" href="{{ url_for('index') }}">返回首页</a>
             <a class="button-danger full" href="{{ url_for('logout') }}">退出登录</a>
         </div>
     </aside>
     <main class="main-content">
+        <div class="main-utility-bar">
+            <a class="button-secondary utility-switch-button" href="{{ url_for('mobile_home') }}">切换到移动端</a>
+        </div>
         {% include '_flashes.html' %}
         {% block content %}{% endblock %}
     </main>

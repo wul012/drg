@@ -328,6 +328,19 @@ code {
     font-size: 13px;
 }
 
+.brand-link {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.brand-link:hover {
+    color: #ffffff;
+}
+
 .nav-list {
     display: grid;
     gap: 8px;
@@ -372,6 +385,18 @@ code {
 .main-content {
     flex: 1;
     padding: 28px;
+}
+
+.main-utility-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.utility-switch-button {
+    min-width: 132px;
 }
 
 .topbar {
@@ -806,6 +831,10 @@ code {
     .main-content,
     .public-shell {
         padding: 18px;
+    }
+
+    .main-utility-bar {
+        justify-content: flex-start;
     }
 
     .topbar {
