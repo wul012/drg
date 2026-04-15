@@ -84,6 +84,11 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.panel-grid.two-columns.analysis-page-grid {
+    grid-template-columns: 1fr;
+    align-items: start;
+}
+
 .board-grid {
     grid-template-columns: 0.95fr 1.15fr 0.9fr;
 }
@@ -457,6 +462,60 @@ code {
     padding: 18px;
 }
 
+.analysis-result-panel {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.analysis-panel-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.analysis-status-tag {
+    margin-left: auto;
+    min-height: 44px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.analysis-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.analysis-summary-card,
+.analysis-recommendation-card {
+    grid-column: 1 / -1;
+}
+
+.analysis-result-card {
+    height: 100%;
+    padding: 22px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.analysis-result-card h4 {
+    font-size: 22px;
+    line-height: 1.35;
+    margin-bottom: 14px;
+}
+
+.analysis-result-card .data-list {
+    gap: 12px;
+    padding-left: 22px;
+}
+
+.analysis-result-card .data-list li {
+    color: var(--text-soft);
+    line-height: 1.9;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
 .simple-item-card {
     background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
@@ -790,5 +849,15 @@ code {
 
     .mobile-topbar {
         align-items: flex-start;
+    }
+
+    .analysis-result-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .analysis-status-tag {
+        width: 100%;
+        justify-content: flex-start;
+        white-space: normal;
     }
 }

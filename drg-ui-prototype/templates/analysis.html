@@ -13,7 +13,7 @@
     </div>
 </header>
 
-<section class="panel-grid two-columns">
+<section class="panel-grid two-columns analysis-page-grid">
     <article class="panel">
         <div class="panel-header">
             <h3>需求录入区</h3>
@@ -57,13 +57,13 @@
         </form>
     </article>
 
-    <article class="panel">
-        <div class="panel-header">
+    <article class="panel analysis-result-panel">
+        <div class="panel-header analysis-panel-header">
             <h3>分析结果区</h3>
-            <span class="status-tag">更新时间：{{ analysis['updated_at'] }}</span>
+            <span class="status-tag analysis-status-tag">更新时间：{{ analysis['updated_at'] }}</span>
         </div>
-        <div class="result-grid">
-            <div class="item-card">
+        <div class="result-grid analysis-result-grid">
+            <div class="item-card analysis-result-card analysis-summary-card">
                 <h4>需求摘要</h4>
                 <ul class="data-list">
                     {% for item in analysis['summary'] %}
@@ -71,7 +71,7 @@
                     {% endfor %}
                 </ul>
             </div>
-            <div class="item-card">
+            <div class="item-card analysis-result-card">
                 <h4>模块建议</h4>
                 <ul class="data-list">
                     {% for item in analysis['modules'] %}
@@ -79,7 +79,7 @@
                     {% endfor %}
                 </ul>
             </div>
-            <div class="item-card">
+            <div class="item-card analysis-result-card">
                 <h4>风险识别</h4>
                 <ul class="data-list">
                     {% for item in analysis['risks'] %}
@@ -87,7 +87,7 @@
                     {% endfor %}
                 </ul>
             </div>
-            <div class="item-card">
+            <div class="item-card analysis-result-card analysis-recommendation-card">
                 <h4>推荐动作</h4>
                 <ul class="data-list">
                     {% for item in analysis['recommendations'] %}
