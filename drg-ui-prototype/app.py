@@ -19,6 +19,18 @@ app = Flask(__name__, instance_path=str(INSTANCE_DIR), instance_relative_config=
 app.config["SECRET_KEY"] = os.environ.get("DRG_APP_SECRET", "drg-ui-prototype-secret")
 app.config["DATABASE"] = str(DATABASE_PATH)
 
+VALID_PRIORITIES = {"高", "中", "低"}
+VALID_DOC_TYPES = {"需求分析文档", "架构设计文档", "测试用例文档", "完整提交包"}
+VALID_ROLES = {"分析员", "医生", "管理员"}
+MAX_PROJECT_NAME_LENGTH = 40
+MAX_DESCRIPTION_LENGTH = 300
+MAX_TARGET_LENGTH = 200
+MAX_REPORT_TITLE_LENGTH = 50
+MAX_REPORT_CONTENT_LENGTH = 500
+MIN_USERNAME_LENGTH = 3
+MAX_USERNAME_LENGTH = 20
+MIN_PASSWORD_LENGTH = 6
+
 
 def now_str() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -32,6 +44,36 @@ def loads(value: str | None) -> list[str]:
     if not value:
         return []
     return json.loads(value)
+
+
+def normalize_choice(value: str, allowed_values: set[str], default: str) -> str:
+    return value if value in allowed_values else default
+
+
+def validate_required_text(field_name: str, value: str, max_length: int) -> str | None:
+    if not value:
+        return f"{field_name}不能为空。"
+    if len(value) > max_length:
+        return f"{field_name}不能超过{max_length}个字符。"
+    return None
+
+
+def validate_username(username: str) -> str | None:
+    if not username:
+        return "用户名不能为空。"
+    if len(username) < MIN_USERNAME_LENGTH:
+        return f"用户名至少需要 {MIN_USERNAME_LENGTH} 个字符。"
+    if len(username) > MAX_USERNAME_LENGTH:
+        return f"用户名不能超过 {MAX_USERNAME_LENGTH} 个字符。"
+    return None
+
+
+def validate_password(password: str) -> str | None:
+    if not password:
+        return "密码不能为空。"
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return f"密码至少需要 {MIN_PASSWORD_LENGTH} 个字符。"
+    return None
 
 
 def get_db() -> sqlite3.Connection:
@@ -602,7 +644,10 @@ def load_logged_in_user() -> None:
     if user_id is None:
         g.user = None
         return
-    g.user = fetch_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = fetch_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    if user is None:
+        session.clear()
+    g.user = user
 
 
 @app.context_processor
@@ -634,29 +679,42 @@ def login():
     if g.user is not None:
         return redirect(url_for("dashboard"))
 
+    form_data = {"username": "admin"}
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        user = fetch_one("SELECT * FROM users WHERE username = ?", (username,))
-        if user is None or not check_password_hash(user["password_hash"], password):
-            flash("用户名或密码错误。演示账号：admin / 123456", "error")
+        form_data["username"] = username
+        if not username or not password:
+            flash("请先输入用户名和密码。", "warning")
         else:
-            session.clear()
-            session["user_id"] = user["id"]
-            flash("登录成功，欢迎进入完整项目。", "success")
-            return redirect(url_for("dashboard"))
+            user = fetch_one("SELECT * FROM users WHERE username = ?", (username,))
+            if user is None or not check_password_hash(user["password_hash"], password):
+                flash("用户名或密码错误。演示账号：admin / 123456", "error")
+            else:
+                session.clear()
+                session["user_id"] = user["id"]
+                flash("登录成功，欢迎进入完整项目。", "success")
+                return redirect(url_for("dashboard"))
 
-    return render_template("login.html")
+    return render_template("login.html", form_data=form_data)
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    form_data = {"username": "", "role": "分析员"}
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        role = request.form.get("role", "分析员")
-        if not username or not password:
-            flash("请完整填写用户名和密码。", "warning")
+        confirm_password = request.form.get("confirm_password", "")
+        role = normalize_choice(request.form.get("role", "分析员"), VALID_ROLES, "分析员")
+        form_data = {"username": username, "role": role}
+        validation_error = validate_username(username)
+        if validation_error is None:
+            validation_error = validate_password(password)
+        if validation_error is None and password != confirm_password:
+            validation_error = "两次输入的密码不一致。"
+        if validation_error is not None:
+            flash(validation_error, "warning")
         elif fetch_one("SELECT id FROM users WHERE username = ?", (username,)) is not None:
             flash("该用户名已存在。", "error")
         else:
@@ -669,7 +727,7 @@ def register():
             flash("注册成功，请使用新账号登录。", "success")
             return redirect(url_for("login"))
 
-    return render_template("register.html")
+    return render_template("register.html", form_data=form_data)
 
 
 @app.route("/logout")
@@ -707,58 +765,80 @@ def dashboard():
 @login_required
 def analysis():
     project = get_project()
+    form_data = {
+        "project_name": project["name"],
+        "description": project["description"],
+        "target": project["target"],
+        "priority": project["priority"],
+        "doc_type": "完整提交包",
+    }
     if request.method == "POST":
         project_name = request.form.get("project_name", project["name"]).strip() or project["name"]
         description = request.form.get("description", project["description"]).strip() or project["description"]
         target = request.form.get("target", project["target"]).strip() or project["target"]
-        priority = request.form.get("priority", project["priority"])
-        doc_type = request.form.get("doc_type", "完整提交包")
-        analysis_payload = build_analysis_payload(project_name, description, target, priority, doc_type)
-        database = get_db()
-        database.execute(
-            """
-            UPDATE projects
-            SET name = ?, owner_name = ?, priority = ?, phase = ?, target = ?, description = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            (project_name, g.user["username"], priority, "文档生成中", target, description, now_str(), project["id"]),
-        )
-        existing = fetch_one("SELECT id FROM analyses WHERE project_id = ?", (project["id"],))
-        if existing is None:
-            database.execute(
-                """
-                INSERT INTO analyses (project_id, summary_json, modules_json, risks_json, recommendations_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    project["id"],
-                    dumps(analysis_payload["summary"]),
-                    dumps(analysis_payload["modules"]),
-                    dumps(analysis_payload["risks"]),
-                    dumps(analysis_payload["recommendations"]),
-                    now_str(),
-                ),
-            )
+        priority = normalize_choice(request.form.get("priority", project["priority"]), VALID_PRIORITIES, project["priority"])
+        doc_type = normalize_choice(request.form.get("doc_type", "完整提交包"), VALID_DOC_TYPES, "完整提交包")
+        form_data = {
+            "project_name": project_name,
+            "description": description,
+            "target": target,
+            "priority": priority,
+            "doc_type": doc_type,
+        }
+        validation_error = validate_required_text("项目名称", project_name, MAX_PROJECT_NAME_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("业务描述", description, MAX_DESCRIPTION_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("目标产物", target, MAX_TARGET_LENGTH)
+        if validation_error is not None:
+            flash(validation_error, "warning")
         else:
+            analysis_payload = build_analysis_payload(project_name, description, target, priority, doc_type)
+            database = get_db()
             database.execute(
                 """
-                UPDATE analyses
-                SET summary_json = ?, modules_json = ?, risks_json = ?, recommendations_json = ?, updated_at = ?
-                WHERE project_id = ?
+                UPDATE projects
+                SET name = ?, owner_name = ?, priority = ?, phase = ?, target = ?, description = ?, updated_at = ?
+                WHERE id = ?
                 """,
-                (
-                    dumps(analysis_payload["summary"]),
-                    dumps(analysis_payload["modules"]),
-                    dumps(analysis_payload["risks"]),
-                    dumps(analysis_payload["recommendations"]),
-                    now_str(),
-                    project["id"],
-                ),
+                (project_name, g.user["username"], priority, "文档生成中", target, description, now_str(), project["id"]),
             )
-        sync_generated_content(project["id"], project_name, analysis_payload)
-        database.commit()
-        flash("需求分析已完成，文档、Agent 和测试用例已同步刷新。", "success")
-        return redirect(url_for("analysis"))
+            existing = fetch_one("SELECT id FROM analyses WHERE project_id = ?", (project["id"],))
+            if existing is None:
+                database.execute(
+                    """
+                    INSERT INTO analyses (project_id, summary_json, modules_json, risks_json, recommendations_json, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project["id"],
+                        dumps(analysis_payload["summary"]),
+                        dumps(analysis_payload["modules"]),
+                        dumps(analysis_payload["risks"]),
+                        dumps(analysis_payload["recommendations"]),
+                        now_str(),
+                    ),
+                )
+            else:
+                database.execute(
+                    """
+                    UPDATE analyses
+                    SET summary_json = ?, modules_json = ?, risks_json = ?, recommendations_json = ?, updated_at = ?
+                    WHERE project_id = ?
+                    """,
+                    (
+                        dumps(analysis_payload["summary"]),
+                        dumps(analysis_payload["modules"]),
+                        dumps(analysis_payload["risks"]),
+                        dumps(analysis_payload["recommendations"]),
+                        now_str(),
+                        project["id"],
+                    ),
+                )
+            sync_generated_content(project["id"], project_name, analysis_payload)
+            database.commit()
+            flash("需求分析已完成，文档、Agent 和测试用例已同步刷新。", "success")
+            return redirect(url_for("analysis"))
 
     project = get_project()
     return render_template(
@@ -766,6 +846,7 @@ def analysis():
         page_key="analysis",
         project=project,
         analysis=get_analysis(project["id"]),
+        form_data=form_data,
     )
 
 
@@ -837,15 +918,23 @@ def submit_page():
     project = get_project()
     documents = get_documents(project["id"])
     if request.method == "POST":
+        if not documents:
+            flash("当前没有可提交文档，请先完成需求分析。", "warning")
+            return redirect(url_for("submit_page"))
         selected_ids = [int(item) for item in request.form.getlist("document_ids") if item.isdigit()]
         if not selected_ids:
             flash("请至少选择一份文档后再提交。", "warning")
             return redirect(url_for("submit_page"))
+        selected_id_set = set(selected_ids)
+        valid_selected_ids = [item["id"] for item in documents if item["id"] in selected_id_set]
+        if not valid_selected_ids:
+            flash("请选择当前项目中的有效文档后再提交。", "warning")
+            return redirect(url_for("submit_page"))
         database = get_db()
-        placeholders = ",".join("?" for _ in selected_ids)
+        placeholders = ",".join("?" for _ in valid_selected_ids)
         database.execute(
             f"UPDATE documents SET status = ?, updated_at = ? WHERE id IN ({placeholders})",
-            tuple(["已提交", now_str(), *selected_ids]),
+            tuple(["已提交", now_str(), *valid_selected_ids]),
         )
         database.execute(
             "UPDATE projects SET phase = ?, updated_at = ? WHERE id = ?",
@@ -857,7 +946,7 @@ def submit_page():
                 project["id"],
                 f"{project['name']} 提交批次 {datetime.now().strftime('%m%d-%H%M')}",
                 "已提交",
-                len(selected_ids),
+                len(valid_selected_ids),
                 g.user["username"],
                 now_str(),
             ),
@@ -902,12 +991,17 @@ def mobile_home():
 @login_required
 def mobile_report():
     project = get_project()
+    form_data = {"title": "", "content": "", "priority": "中"}
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         content = request.form.get("content", "").strip()
-        priority = request.form.get("priority", "中")
-        if not title or not content:
-            flash("请完整填写上报标题和内容。", "warning")
+        priority = normalize_choice(request.form.get("priority", "中"), VALID_PRIORITIES, "中")
+        form_data = {"title": title, "content": content, "priority": priority}
+        validation_error = validate_required_text("上报标题", title, MAX_REPORT_TITLE_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("上报内容", content, MAX_REPORT_CONTENT_LENGTH)
+        if validation_error is not None:
+            flash(validation_error, "warning")
         else:
             database = get_db()
             database.execute(
@@ -926,7 +1020,7 @@ def mobile_report():
             flash("上报成功，PC端消息流已同步新增记录。", "success")
             return redirect(url_for("mobile_messages"))
 
-    return render_template("mobile_report.html", page_key="mobile_report", project=project)
+    return render_template("mobile_report.html", page_key="mobile_report", project=project, form_data=form_data)
 
 
 @app.route("/mobile/messages")

@@ -38,6 +38,16 @@ pip install -r requirements.txt
 python run_server.py
 ```
 
+## 数据库位置
+
+项目运行后会自动生成 SQLite 数据库：
+
+```text
+instance/drg_platform.db
+```
+
+如果你在 PyCharm 中连接数据库，请选择这个文件，而不是旧的示例库文件。
+
 ## 默认演示账号
 
 - `admin / 123456`
@@ -49,6 +59,7 @@ python run_server.py
 - `app.py`：Flask 主应用，包含路由、数据库初始化和业务逻辑
 - `run_server.py`：本地启动脚本
 - `requirements.txt`：Python 依赖
+- `smoke_test.py`：基础回归测试脚本
 - `templates/`：Jinja2 模板
 - `static/css/style.css`：完整项目样式
 - `static/js/app.js`：前端交互脚本
@@ -65,3 +76,19 @@ python run_server.py
 - 测试用例重生成
 - 提交中心与提交记录留痕
 - 响应式移动端首页、上报、消息和文档页面
+
+## 回归测试
+
+可以直接运行以下命令验证主流程和关键校验：
+
+```bash
+python smoke_test.py
+```
+
+脚本会自动验证：首页访问、登录、注册校验、需求分析、提交中心和移动端上报。
+
+## 兼容说明
+
+- 根目录旧的 `index.html` 已改为跳转说明页，用于避免误打开旧原型入口。
+- `pages/`、`css/`、`js/` 等旧原型目录仅保留作历史兼容，不参与 Flask 正式运行。
+- 正式项目只依赖：`app.py`、`run_server.py`、`templates/`、`static/`、`instance/`。

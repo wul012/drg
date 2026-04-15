@@ -15,18 +15,18 @@
         <form method="post" class="form-grid">
             <div class="field">
                 <label for="title">上报标题</label>
-                <input class="input" id="title" name="title" type="text" placeholder="例如：新增病例录入需求" required />
+                <input class="input" id="title" name="title" type="text" placeholder="例如：新增病例录入需求" value="{{ form_data['title'] }}" required />
             </div>
             <div class="field">
                 <label for="content">上报内容</label>
-                <textarea class="textarea" id="content" name="content" placeholder="请输入需要同步到PC端的内容" required></textarea>
+                <textarea class="textarea" id="content" name="content" placeholder="请输入需要同步到PC端的内容" required>{{ form_data['content'] }}</textarea>
             </div>
             <div class="field">
                 <label for="priority">优先级</label>
                 <select class="input" id="priority" name="priority">
-                    <option value="高">高</option>
-                    <option value="中">中</option>
-                    <option value="低">低</option>
+                    <option value="高" {% if form_data['priority'] == '高' %}selected{% endif %}>高</option>
+                    <option value="中" {% if form_data['priority'] == '中' %}selected{% endif %}>中</option>
+                    <option value="低" {% if form_data['priority'] == '低' %}selected{% endif %}>低</option>
                 </select>
             </div>
             <div class="form-actions">

@@ -1,0 +1,12 @@
+.idea/
+__pycache__/
+.playwright-mcp/
+instance/*.db
+*.sqlite
+*.pyc
+/css/
+/js/
+/pages/
+/identifier.sqlite
+/instance/*.dbv
+/favicon.ico

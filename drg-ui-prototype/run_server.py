@@ -1,9 +1,7 @@
-from pathlib import Path
 import webbrowser
 
 HOST = "127.0.0.1"
 PORT = 5000
-ROOT = Path(__file__).resolve().parent
 
 
 if __name__ == "__main__":

@@ -21,32 +21,32 @@
         <form class="form-grid" method="post">
             <div class="field">
                 <label for="project_name">项目名称</label>
-                <input class="input" id="project_name" name="project_name" type="text" value="{{ project['name'] }}" required />
+                <input class="input" id="project_name" name="project_name" type="text" value="{{ form_data['project_name'] }}" required />
             </div>
             <div class="field">
                 <label for="description">业务描述</label>
-                <textarea class="textarea" id="description" name="description" required>{{ project['description'] }}</textarea>
+                <textarea class="textarea" id="description" name="description" required>{{ form_data['description'] }}</textarea>
             </div>
             <div class="field">
                 <label for="target">目标产物</label>
-                <textarea class="textarea" id="target" name="target" required>{{ project['target'] }}</textarea>
+                <textarea class="textarea" id="target" name="target" required>{{ form_data['target'] }}</textarea>
             </div>
             <div class="form-row two-columns-row">
                 <div class="field">
                     <label for="priority">优先级</label>
                     <select class="input" id="priority" name="priority">
-                        <option value="高" {% if project['priority'] == '高' %}selected{% endif %}>高</option>
-                        <option value="中" {% if project['priority'] == '中' %}selected{% endif %}>中</option>
-                        <option value="低" {% if project['priority'] == '低' %}selected{% endif %}>低</option>
+                        <option value="高" {% if form_data['priority'] == '高' %}selected{% endif %}>高</option>
+                        <option value="中" {% if form_data['priority'] == '中' %}selected{% endif %}>中</option>
+                        <option value="低" {% if form_data['priority'] == '低' %}selected{% endif %}>低</option>
                     </select>
                 </div>
                 <div class="field">
                     <label for="doc_type">目标文档类型</label>
                     <select class="input" id="doc_type" name="doc_type">
-                        <option value="需求分析文档">需求分析文档</option>
-                        <option value="架构设计文档">架构设计文档</option>
-                        <option value="测试用例文档">测试用例文档</option>
-                        <option value="完整提交包">完整提交包</option>
+                        <option value="需求分析文档" {% if form_data['doc_type'] == '需求分析文档' %}selected{% endif %}>需求分析文档</option>
+                        <option value="架构设计文档" {% if form_data['doc_type'] == '架构设计文档' %}selected{% endif %}>架构设计文档</option>
+                        <option value="测试用例文档" {% if form_data['doc_type'] == '测试用例文档' %}selected{% endif %}>测试用例文档</option>
+                        <option value="完整提交包" {% if form_data['doc_type'] == '完整提交包' %}selected{% endif %}>完整提交包</option>
                     </select>
                 </div>
             </div>

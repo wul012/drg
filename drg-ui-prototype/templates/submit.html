@@ -25,20 +25,24 @@
             <h3>待提交文档清单</h3>
         </div>
         <form method="post" class="form-grid">
-            <div class="list-stack">
-                {% for item in documents %}
-                    <label class="item-card checkbox-card">
-                        <span>
-                            <strong>{{ item['title'] }}</strong>
-                            <small>{{ item['version'] }} · {{ item['updated_at'] }} · {{ item['status'] }}</small>
-                        </span>
-                        <input type="checkbox" name="document_ids" value="{{ item['id'] }}" checked />
-                    </label>
-                {% endfor %}
-            </div>
-            <div class="form-actions">
-                <button class="button" type="submit">确认提交</button>
-            </div>
+            {% if documents %}
+                <div class="list-stack">
+                    {% for item in documents %}
+                        <label class="item-card checkbox-card">
+                            <span>
+                                <strong>{{ item['title'] }}</strong>
+                                <small>{{ item['version'] }} · {{ item['updated_at'] }} · {{ item['status'] }}</small>
+                            </span>
+                            <input type="checkbox" name="document_ids" value="{{ item['id'] }}" checked />
+                        </label>
+                    {% endfor %}
+                </div>
+                <div class="form-actions">
+                    <button class="button" type="submit">确认提交</button>
+                </div>
+            {% else %}
+                <div class="empty-state">暂无可提交文档，请先到需求分析页生成正式文档。</div>
+            {% endif %}
         </form>
     </article>
 
@@ -46,18 +50,22 @@
         <div class="panel-header">
             <h3>历史提交记录</h3>
         </div>
-        <div class="list-stack">
-            {% for item in submissions %}
-                <div class="item-card">
-                    <div class="item-card-top wrap-top">
-                        <strong>{{ item['batch_name'] }}</strong>
-                        <span class="status-tag {% if item['status'] == '已提交' %}success{% else %}warning{% endif %}">{{ item['status'] }}</span>
+        {% if submissions %}
+            <div class="list-stack">
+                {% for item in submissions %}
+                    <div class="item-card">
+                        <div class="item-card-top wrap-top">
+                            <strong>{{ item['batch_name'] }}</strong>
+                            <span class="status-tag {% if item['status'] == '已提交' %}success{% else %}warning{% endif %}">{{ item['status'] }}</span>
+                        </div>
+                        <p>操作人：{{ item['operator_name'] }}</p>
+                        <p>文档数：{{ item['docs_count'] }} · 提交时间：{{ item['submitted_at'] }}</p>
                     </div>
-                    <p>操作人：{{ item['operator_name'] }}</p>
-                    <p>文档数：{{ item['docs_count'] }} · 提交时间：{{ item['submitted_at'] }}</p>
-                </div>
-            {% endfor %}
-        </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">当前还没有历史提交记录。</div>
+        {% endif %}
     </article>
 </section>
 {% endblock %}
