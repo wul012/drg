@@ -3,9 +3,9 @@
 {% block title %}首页 - 医保DRG智能协同平台{% endblock %}
 
 {% block content %}
-<section class="landing-shell">
-    <div class="landing-hero-grid">
-        <div class="hero-panel hero-panel-primary">
+<section class="landing-shell landing-shell-showcase">
+    <div class="landing-hero-grid landing-hero-grid-showcase">
+        <div class="hero-panel hero-panel-primary hero-panel-showcase">
             <span class="badge">Flask + SQLite 完整项目</span>
             <h1>医保DRG智能协同平台</h1>
             <p>
@@ -21,9 +21,33 @@
                     <a class="button-secondary" href="{{ url_for('register') }}">注册账号</a>
                 {% endif %}
             </div>
+            <div class="hero-proof-grid">
+                <div class="hero-proof-item">
+                    <strong>{{ doc_count }}</strong>
+                    <span>文档资产</span>
+                </div>
+                <div class="hero-proof-item">
+                    <strong>{{ submission_count }}</strong>
+                    <span>提交批次</span>
+                </div>
+                <div class="hero-proof-item">
+                    <strong>{{ report_count }}</strong>
+                    <span>移动上报</span>
+                </div>
+                <div class="hero-proof-item">
+                    <strong>{{ case_count }}</strong>
+                    <span>病例样本</span>
+                </div>
+            </div>
         </div>
-        <div class="hero-panel hero-panel-light">
-            <h3>项目概览</h3>
+        <div class="hero-panel hero-panel-light hero-side-panel">
+            <div class="panel-header compact-header">
+                <div>
+                    <span class="section-tag">当前演示项目</span>
+                    <h3>项目概览</h3>
+                </div>
+                <span class="status-tag">{{ project['phase'] }}</span>
+            </div>
             <div class="info-list">
                 <div class="info-row"><strong>项目名称</strong><span>{{ project['name'] }}</span></div>
                 <div class="info-row"><strong>当前阶段</strong><span>{{ project['phase'] }}</span></div>
@@ -41,22 +65,83 @@
         </div>
     </div>
 
-    <div class="feature-grid">
+    <div class="feature-grid feature-grid-showcase">
         <article class="feature-card">
+            <span class="feature-eyebrow">01</span>
             <h3>桌面端完整业务流</h3>
             <p>登录 -> 工作台 -> 需求分析 -> DRG分析 -> Agent协作 -> 文档中心 -> 测试中心 -> 提交中心。</p>
         </article>
         <article class="feature-card">
+            <span class="feature-eyebrow">02</span>
             <h3>真实数据存储</h3>
             <p>项目数据、分析结果、文档、消息、测试用例和提交记录全部落到 SQLite 数据库。</p>
         </article>
         <article class="feature-card">
+            <span class="feature-eyebrow">03</span>
             <h3>响应式移动端</h3>
             <p>移动端页面不再使用手机壳原型框，而是直接采用真实移动端布局和底部导航。</p>
         </article>
         <article class="feature-card">
+            <span class="feature-eyebrow">04</span>
             <h3>课程实验核心能力</h3>
             <p>覆盖登录、需求分析、多Agent协作、文档生成、测试用例和提交流程等关键要求。</p>
+        </article>
+    </div>
+
+    <div class="panel-grid two-columns showcase-panel-grid">
+        <article class="panel showcase-flow-panel">
+            <div class="panel-header compact-header">
+                <div>
+                    <span class="section-tag">主流程展示</span>
+                    <h3>从需求到提交的业务闭环</h3>
+                </div>
+                <span class="badge">可运行 / 可验证</span>
+            </div>
+            <div class="showcase-flow-grid">
+                <div class="showcase-flow-card">
+                    <strong>01</strong>
+                    <span>需求分析</span>
+                    <p>真正把项目需求写入数据库，并联动刷新后续产物。</p>
+                </div>
+                <div class="showcase-flow-card">
+                    <strong>02</strong>
+                    <span>DRG分析</span>
+                    <p>展示病例分组、风险等级与业务说明，不只是静态页面。</p>
+                </div>
+                <div class="showcase-flow-card">
+                    <strong>03</strong>
+                    <span>Agent协作</span>
+                    <p>串起桌面端和移动端消息流，体现协作过程。</p>
+                </div>
+                <div class="showcase-flow-card">
+                    <strong>04</strong>
+                    <span>测试与提交</span>
+                    <p>自动生成测试用例并形成真实提交记录，闭合课程实验链路。</p>
+                </div>
+            </div>
+        </article>
+        <article class="panel showcase-value-panel">
+            <div class="panel-header compact-header">
+                <div>
+                    <span class="section-tag">答辩亮点</span>
+                    <h3>为什么这个项目适合展示</h3>
+                </div>
+                <span class="badge">课程实验导向</span>
+            </div>
+            <div class="list-stack">
+                <div class="item-card simple-item-card">
+                    <strong>不是原型，而是真实系统</strong>
+                    <p>登录、分析、文档、消息、测试、提交都通过 Flask + SQLite 串起来。</p>
+                </div>
+                <div class="item-card simple-item-card">
+                    <strong>桌面端与移动端联动</strong>
+                    <p>移动端上报会进入桌面端协作消息链路，展示完整业务协同。</p>
+                </div>
+                <div class="item-card simple-item-card">
+                    <strong>可直接演示关键业务价值</strong>
+                    <p>从需求录入到最终提交，页面间关系清楚，适合课堂讲解和现场答辩。</p>
+                </div>
+            </div>
         </article>
     </div>
 </section>
