@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime
 from functools import wraps
@@ -30,6 +31,95 @@ MAX_REPORT_CONTENT_LENGTH = 500
 MIN_USERNAME_LENGTH = 3
 MAX_USERNAME_LENGTH = 20
 MIN_PASSWORD_LENGTH = 6
+VIRTUAL_DOCS_DIR = INSTANCE_DIR / "virtual_docs"
+SUBMISSION_ARTIFACTS_DIR = INSTANCE_DIR / "submissions"
+MAX_PATIENT_NAME_LENGTH = 30
+MAX_RECORD_TEXT_LENGTH = 800
+MAX_MEDICAL_NAME_LENGTH = 60
+MAX_MEDICAL_CODE_LENGTH = 40
+SIMPLIFIED_MDC_RULES = [
+    {
+        "mdc_code": "MDCB",
+        "mdc_name": "神经系统疾病及功能障碍大类",
+        "diagnosis_prefixes": ["G01", "I60", "I61", "I63", "A01.002"],
+    },
+    {
+        "mdc_code": "MDCA",
+        "mdc_name": "呼吸系统疾病大类",
+        "diagnosis_prefixes": ["J18", "J44", "J96", "J12"],
+    },
+    {
+        "mdc_code": "MDCD",
+        "mdc_name": "消化系统疾病大类",
+        "diagnosis_prefixes": ["K35", "K36", "K80", "K81"],
+    },
+    {
+        "mdc_code": "MDCF",
+        "mdc_name": "内分泌与代谢系统疾病大类",
+        "diagnosis_prefixes": ["E10", "E11", "E14", "L97"],
+    },
+]
+SIMPLIFIED_ADRG_RULES = {
+    "MDCB": [
+        {
+            "adrg_code": "BB1",
+            "adrg_name": "神经系统复杂手术组",
+            "procedure_prefixes": ["38.1000", "01.24", "01.59"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "BZ1",
+            "adrg_name": "神经系统内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+    "MDCA": [
+        {
+            "adrg_code": "AB1",
+            "adrg_name": "呼吸系统手术组",
+            "procedure_prefixes": ["33.22", "32.50"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "AZ1",
+            "adrg_name": "呼吸系统内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+    "MDCD": [
+        {
+            "adrg_code": "GD1",
+            "adrg_name": "阑尾切除术组",
+            "procedure_prefixes": ["47.0", "47.09", "47.1"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "GZ1",
+            "adrg_name": "消化系统内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+    "MDCF": [
+        {
+            "adrg_code": "KD1",
+            "adrg_name": "糖尿病足手术组",
+            "procedure_prefixes": ["86.2200", "86.22"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "KZ1",
+            "adrg_name": "代谢系统内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+}
+SIMPLIFIED_MCC_CODES = {"J96", "I50", "N17", "R57", "A41"}
+SIMPLIFIED_CC_CODES = {"E87", "D64", "I10", "N39", "J18"}
+SIMPLIFIED_EXCLUDED_CC_MCC = {"Z00", "Z01"}
 
 
 def now_str() -> str:
@@ -91,8 +181,252 @@ def close_db(_: Any) -> None:
         database.close()
 
 
-def init_database() -> None:
+def ensure_storage_directories() -> None:
     INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
+    VIRTUAL_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    SUBMISSION_ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    return {row[1] for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def ensure_column_exists(connection: sqlite3.Connection, table_name: str, column_name: str, definition: str) -> None:
+    if column_name not in get_table_columns(connection, table_name):
+        connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
+
+
+def run_schema_migrations(connection: sqlite3.Connection) -> None:
+    ensure_column_exists(connection, "drg_cases", "record_text", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "primary_diagnosis_code", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "primary_diagnosis_name", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "secondary_diagnosis_codes_json", "TEXT NOT NULL DEFAULT '[]'")
+    ensure_column_exists(connection, "drg_cases", "procedure_code", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "procedure_name", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "mdc_code", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "mdc_name", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "adrg_code", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "adrg_name", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "drg_name", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "complication_level", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "group_reason", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "drg_cases", "updated_at", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "documents", "source_agent", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "documents", "storage_path", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "documents", "received_at", "TEXT NOT NULL DEFAULT ''")
+    ensure_column_exists(connection, "test_cases", "case_category", "TEXT NOT NULL DEFAULT '正常'")
+    ensure_column_exists(connection, "submissions", "artifact_path", "TEXT NOT NULL DEFAULT ''")
+
+
+def normalize_medical_code(value: str) -> str:
+    return value.strip().upper()
+
+
+def parse_code_list(raw_text: str) -> list[str]:
+    if not raw_text:
+        return []
+    return [normalize_medical_code(item) for item in re.split(r"[\s,，、;；\n]+", raw_text) if item.strip()]
+
+
+def tokenize_medical_code(value: str) -> list[str]:
+    if not value:
+        return []
+    return [normalize_medical_code(item) for item in re.split(r"[+＋/、,，\s]+", value) if item.strip()]
+
+
+def match_mdc(primary_diagnosis_code: str) -> dict[str, str]:
+    tokens = tokenize_medical_code(primary_diagnosis_code)
+    for rule in SIMPLIFIED_MDC_RULES:
+        for prefix in rule["diagnosis_prefixes"]:
+            matched_token = next((token for token in tokens if token.startswith(prefix)), None)
+            if matched_token:
+                return {
+                    "mdc_code": rule["mdc_code"],
+                    "mdc_name": rule["mdc_name"],
+                    "matched_code": matched_token,
+                }
+    return {"mdc_code": "MDCQ", "mdc_name": "未细分教学演示大类", "matched_code": normalize_medical_code(primary_diagnosis_code)}
+
+
+def match_adrg(mdc_code: str, procedure_code: str) -> dict[str, Any]:
+    normalized_code = normalize_medical_code(procedure_code)
+    fallback_rule = None
+    for rule in SIMPLIFIED_ADRG_RULES.get(mdc_code, []):
+        prefixes = rule["procedure_prefixes"]
+        if not prefixes:
+            fallback_rule = rule
+            continue
+        if any(normalized_code.startswith(prefix) for prefix in prefixes):
+            return {**rule, "matched": True, "matched_procedure": normalized_code}
+    if fallback_rule is not None:
+        return {**fallback_rule, "matched": bool(normalized_code), "matched_procedure": normalized_code or "未提供主手术编码"}
+    return {
+        "adrg_code": "QZ1",
+        "adrg_name": "未细分教学演示组",
+        "procedure_prefixes": [],
+        "supports_complication": True,
+        "matched": False,
+        "matched_procedure": normalized_code or "未提供主手术编码",
+    }
+
+
+def detect_complication_level(primary_diagnosis_code: str, secondary_codes: list[str]) -> dict[str, str]:
+    primary_tokens = tokenize_medical_code(primary_diagnosis_code)
+    cc_result = None
+    for raw_code in secondary_codes:
+        normalized_code = normalize_medical_code(raw_code)
+        if not normalized_code or normalized_code in SIMPLIFIED_EXCLUDED_CC_MCC:
+            continue
+        if any(normalized_code.startswith(token[:3]) for token in primary_tokens if len(token) >= 3):
+            continue
+        if any(normalized_code.startswith(prefix) for prefix in SIMPLIFIED_MCC_CODES):
+            return {
+                "level": "MCC",
+                "matched_code": normalized_code,
+                "reason": f"次诊断 {normalized_code} 命中教学版 MCC 列表。",
+            }
+        if cc_result is None and any(normalized_code.startswith(prefix) for prefix in SIMPLIFIED_CC_CODES):
+            cc_result = {
+                "level": "CC",
+                "matched_code": normalized_code,
+                "reason": f"次诊断 {normalized_code} 命中教学版 CC 列表。",
+            }
+    if cc_result is not None:
+        return cc_result
+    return {"level": "无CC/MCC", "matched_code": "", "reason": "未发现有效的 CC/MCC 次诊断。"}
+
+
+def build_drg_name(adrg_name: str, complication_level: str) -> str:
+    base_name = adrg_name[:-1] if adrg_name.endswith("组") else adrg_name
+    suffix = {
+        "MCC": "，伴严重合并症或并发症",
+        "CC": "，伴一般合并症或并发症",
+        "无CC/MCC": "，无合并症或并发症",
+    }.get(complication_level, "，需复核")
+    return f"{base_name}{suffix}"
+
+
+def group_drg_case(
+    primary_diagnosis_code: str,
+    primary_diagnosis_name: str,
+    procedure_code: str,
+    procedure_name: str,
+    secondary_codes: list[str],
+    raw_record: str,
+) -> dict[str, str]:
+    mdc_result = match_mdc(primary_diagnosis_code)
+    adrg_result = match_adrg(mdc_result["mdc_code"], procedure_code)
+    complication_result = detect_complication_level(primary_diagnosis_code, secondary_codes)
+    suffix = {"MCC": "1", "CC": "3", "无CC/MCC": "5"}.get(complication_result["level"], "9")
+    drg_code = f"{adrg_result['adrg_code']}{suffix}"
+    status = "已完成" if mdc_result["mdc_code"] != "MDCQ" and adrg_result["adrg_code"] != "QZ1" else "需复核"
+    risk_level = "高" if complication_result["level"] == "MCC" or status == "需复核" else "中" if complication_result["level"] == "CC" else "低"
+    reason_parts = [
+        f"主诊断 {primary_diagnosis_code}（{primary_diagnosis_name}）命中 {mdc_result['mdc_code']} {mdc_result['mdc_name']}。",
+        f"主手术 {procedure_code or '未填写'}（{procedure_name or '未填写'}）归入 {adrg_result['adrg_code']} {adrg_result['adrg_name']}。",
+        complication_result["reason"],
+    ]
+    if raw_record:
+        reason_parts.append("电子病历摘要已纳入本地教学规则匹配。")
+    if status != "已完成":
+        reason_parts.append("当前结果未命中完整教学规则，建议人工复核。")
+    return {
+        "mdc_code": mdc_result["mdc_code"],
+        "mdc_name": mdc_result["mdc_name"],
+        "adrg_code": adrg_result["adrg_code"],
+        "adrg_name": adrg_result["adrg_name"],
+        "drg_code": drg_code,
+        "drg_name": build_drg_name(adrg_result["adrg_name"], complication_result["level"]),
+        "complication_level": complication_result["level"],
+        "risk_level": risk_level,
+        "status": status,
+        "group_reason": "；".join(reason_parts),
+    }
+
+
+def build_case_record(
+    case_code: str,
+    patient_name: str,
+    record_text: str,
+    primary_diagnosis_code: str,
+    primary_diagnosis_name: str,
+    secondary_diagnosis_codes: list[str],
+    procedure_code: str,
+    procedure_name: str,
+    created_at: str | None = None,
+) -> dict[str, str]:
+    timestamp = created_at or now_str()
+    grouped_result = group_drg_case(
+        primary_diagnosis_code,
+        primary_diagnosis_name,
+        procedure_code,
+        procedure_name,
+        secondary_diagnosis_codes,
+        record_text,
+    )
+    return {
+        "case_code": case_code,
+        "patient_name": patient_name,
+        "record_text": record_text,
+        "primary_diagnosis_code": primary_diagnosis_code,
+        "primary_diagnosis_name": primary_diagnosis_name,
+        "secondary_diagnosis_codes_json": dumps(secondary_diagnosis_codes),
+        "procedure_code": procedure_code,
+        "procedure_name": procedure_name,
+        "diagnosis": f"{primary_diagnosis_name}（{primary_diagnosis_code}）",
+        "mdc_code": grouped_result["mdc_code"],
+        "mdc_name": grouped_result["mdc_name"],
+        "adrg_code": grouped_result["adrg_code"],
+        "adrg_name": grouped_result["adrg_name"],
+        "drg_code": grouped_result["drg_code"],
+        "drg_name": grouped_result["drg_name"],
+        "complication_level": grouped_result["complication_level"],
+        "status": grouped_result["status"],
+        "risk_level": grouped_result["risk_level"],
+        "note": grouped_result["group_reason"],
+        "group_reason": grouped_result["group_reason"],
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+
+
+def sanitize_filename(value: str) -> str:
+    sanitized = re.sub(r"[^\w\u4e00-\u9fff.-]+", "_", value).strip("._")
+    return sanitized or "artifact"
+
+
+def to_relative_storage_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(BASE_DIR))
+    except ValueError:
+        return str(path)
+
+
+def write_virtual_document(project_name: str, title: str, version: str, content: str, received_at: str) -> str:
+    ensure_storage_directories()
+    file_name = f"{sanitize_filename(project_name)}_{sanitize_filename(title)}_{sanitize_filename(version)}_{received_at.replace(':', '').replace(' ', '-')}.txt"
+    file_path = VIRTUAL_DOCS_DIR / file_name
+    file_path.write_text(content, encoding="utf-8")
+    return to_relative_storage_path(file_path)
+
+
+def write_submission_artifact(batch_name: str, operator_name: str, selected_documents: list[dict[str, Any]], submitted_at: str) -> str:
+    ensure_storage_directories()
+    file_name = f"{sanitize_filename(batch_name)}_{submitted_at.replace(':', '').replace(' ', '-')}.txt"
+    file_path = SUBMISSION_ARTIFACTS_DIR / file_name
+    content_lines = [
+        f"批次名称：{batch_name}",
+        f"操作人：{operator_name}",
+        f"提交时间：{submitted_at}",
+        "文档清单：",
+    ]
+    content_lines.extend([f"- {item['title']} | {item['version']} | {item['status']}" for item in selected_documents])
+    file_path.write_text("\n".join(content_lines), encoding="utf-8")
+    return to_relative_storage_path(file_path)
+
+
+def init_database() -> None:
+    ensure_storage_directories()
     connection = sqlite3.connect(app.config["DATABASE"])
     connection.executescript(
         """
@@ -210,6 +544,7 @@ def init_database() -> None:
         );
         """
     )
+    run_schema_migrations(connection)
     connection.commit()
     connection.close()
 
@@ -243,116 +578,164 @@ def build_analysis_payload(project_name: str, description: str, target: str, pri
     }
 
 
-def build_agents_payload() -> list[dict[str, str]]:
+def get_latest_case(drg_cases: list[Any]) -> Any | None:
+    return drg_cases[-1] if drg_cases else None
+
+
+def build_agents_payload(
+    project_name: str,
+    analysis_payload: dict[str, list[str]],
+    drg_cases: list[Any],
+    has_submissions: bool,
+) -> list[dict[str, str]]:
+    latest_case = get_latest_case(drg_cases)
+    latest_case_label = latest_case["case_code"] if latest_case else "暂无病例"
     return [
-        {"name": "需求分析 Agent", "owner": "产品侧", "status": "已完成", "focus": "解析需求输入并提炼关键模块"},
-        {"name": "DRG 分析 Agent", "owner": "业务侧", "status": "已完成", "focus": "输出病例与DRG规则匹配结果"},
-        {"name": "文档生成 Agent", "owner": "交付侧", "status": "运行中", "focus": "生成需求、架构和测试文档"},
-        {"name": "测试用例 Agent", "owner": "测试侧", "status": "待处理", "focus": "整理测试步骤与预期结果"},
-        {"name": "提交 Agent", "owner": "管理侧", "status": "待处理", "focus": "打包文档并提交到虚拟系统"},
+        {"name": "需求分析 Agent", "owner": "产品侧", "status": "已完成", "focus": f"完成 {project_name} 的需求摘要、模块建议与风险识别"},
+        {"name": "DRG 分析 Agent", "owner": "业务侧", "status": "已完成" if latest_case else "待处理", "focus": f"最近处理病例：{latest_case_label}"},
+        {"name": "文档生成 Agent", "owner": "交付侧", "status": "已完成", "focus": f"基于 {len(analysis_payload['modules'])} 个核心模块生成文档"},
+        {"name": "测试用例 Agent", "owner": "测试侧", "status": "已完成" if latest_case else "运行中", "focus": "输出正常、边界、异常三类测试用例"},
+        {"name": "提交 Agent", "owner": "管理侧", "status": "已完成" if has_submissions else "待处理", "focus": "接收虚拟文档系统文档并生成提交批次"},
     ]
 
 
-def build_messages_payload(project_name: str) -> list[dict[str, str]]:
+def build_messages_payload(project_name: str, analysis_payload: dict[str, list[str]], drg_cases: list[Any]) -> list[dict[str, str]]:
     timestamp = now_str()
+    latest_case = get_latest_case(drg_cases)
+    latest_case_message = (
+        f"最新病例 {latest_case['case_code']} 已完成入组，结果为 {latest_case['drg_code']}。"
+        if latest_case
+        else "当前尚无已录入病例，等待 DRG 规则匹配输入。"
+    )
     return [
         {
             "sender": "需求分析 Agent",
             "receiver": "DRG 分析 Agent",
-            "content": f"已解析 {project_name} 的需求上下文，请开始进行规则匹配与风险识别。",
+            "content": f"已解析 {project_name} 的需求上下文，共识别 {len(analysis_payload['modules'])} 个核心模块。",
             "source": "desktop",
             "created_at": timestamp,
         },
         {
             "sender": "DRG 分析 Agent",
             "receiver": "文档生成 Agent",
-            "content": "规则匹配已完成，请基于结果生成需求分析文档和风险说明。",
+            "content": latest_case_message,
             "source": "desktop",
             "created_at": timestamp,
         },
         {
             "sender": "文档生成 Agent",
             "receiver": "测试用例 Agent",
-            "content": "需求与设计文档已就绪，请同步形成测试覆盖清单。",
+            "content": "虚拟文档系统已接收最新需求、架构与测试文档，请同步刷新测试覆盖清单。",
             "source": "desktop",
             "created_at": timestamp,
         },
     ]
 
 
-def build_documents_payload(project_name: str, analysis_payload: dict[str, list[str]]) -> list[dict[str, str]]:
+def build_documents_payload(project_name: str, analysis_payload: dict[str, list[str]], drg_cases: list[Any]) -> list[dict[str, str]]:
     timestamp = now_str()
-    return [
+    latest_case = get_latest_case(drg_cases)
+    latest_case_lines = [
+        f"最新病例：{latest_case['case_code']} / {latest_case['patient_name']}",
+        f"入组结果：{latest_case['mdc_code']} -> {latest_case['adrg_code']} -> {latest_case['drg_code']}",
+        f"入组说明：{latest_case['group_reason']}",
+    ] if latest_case else ["当前暂无病例入组结果，文档基于需求分析上下文生成。"]
+    payload = [
         {
             "title": "需求分析文档",
             "status": "已生成",
-            "version": "V1.1",
+            "version": "V2.0",
             "updated_at": timestamp,
+            "source_agent": "需求分析 Agent",
             "content": "\n".join(
                 [
                     f"一、项目名称：{project_name}",
                     f"二、需求摘要：{'；'.join(analysis_payload['summary'])}",
                     f"三、建议模块：{'、'.join(analysis_payload['modules'])}",
+                    f"四、风险识别：{'；'.join(analysis_payload['risks'])}",
                 ]
             ),
         },
         {
             "title": "架构设计文档",
-            "status": "待更新",
-            "version": "V1.0",
+            "status": "已生成",
+            "version": "V2.0",
             "updated_at": timestamp,
+            "source_agent": "文档生成 Agent",
             "content": "\n".join(
                 [
-                    "一、系统采用 Flask + SQLite 的前后端一体化方案。",
-                    "二、PC端包含工作台、分析、DRG、Agent、文档、测试与提交中心。",
-                    "三、移动端包含上报、消息和文档查看，采用响应式布局而非原型手机壳。",
+                    "一、系统采用 Flask + SQLite 的本地可运行架构。",
+                    "二、PC端包括工作台、需求分析、DRG入组、Agent、文档、测试和提交中心。",
+                    "三、移动端包括上报、消息和文档查看，并与桌面端消息流联动。",
+                    *latest_case_lines,
                 ]
             ),
         },
         {
-            "title": "测试用例文档",
+            "title": "测试文档",
             "status": "已生成",
-            "version": "V1.0",
+            "version": "V2.0",
             "updated_at": timestamp,
+            "source_agent": "测试用例 Agent",
             "content": "\n".join(
                 [
-                    f"一、重点覆盖 {project_name} 的主业务链路。",
-                    "二、覆盖登录、需求分析、消息联动、文档查看和提交流程。",
-                    "三、覆盖移动端上报与结果查看。",
+                    f"一、重点覆盖 {project_name} 的主业务链路与 DRG 入组闭环。",
+                    "二、覆盖正常入组、无 CC/MCC 边界场景以及编码缺失异常场景。",
+                    "三、覆盖虚拟文档系统接收、提交中心留痕和移动端上报同步。",
                 ]
             ),
         },
     ]
+    for item in payload:
+        item["received_at"] = item["updated_at"]
+        item["storage_path"] = write_virtual_document(project_name, item["title"], item["version"], item["content"], item["received_at"])
+    return payload
 
 
-def build_test_cases_payload(project_name: str) -> list[dict[str, str]]:
+def build_test_cases_payload(project_name: str, drg_cases: list[Any]) -> list[dict[str, str]]:
     timestamp = now_str()
+    latest_case = get_latest_case(drg_cases)
+    latest_case_code = latest_case["case_code"] if latest_case else "CASE-DEMO"
+    latest_case_drg = latest_case["drg_code"] if latest_case else "GD15"
     return [
         {
-            "case_code": "TC-101",
-            "feature": "需求分析自动生成",
-            "precondition_text": "用户已登录并进入需求分析页",
-            "steps_text": f"填写 {project_name} 的需求描述并点击开始分析",
-            "expected_text": "生成摘要、模块建议与风险识别结果",
+            "case_code": "TC-201",
+            "feature": "DRG入组正常场景",
+            "precondition_text": "已录入完整电子病历、主诊断、次诊断和主手术编码",
+            "steps_text": f"提交病例 {latest_case_code} 并执行本地教学规则入组",
+            "expected_text": f"成功输出 MDC / ADRG / DRG，且最新病例结果展示为 {latest_case_drg}",
             "priority": "高",
+            "case_category": "正常",
             "updated_at": timestamp,
         },
         {
-            "case_code": "TC-102",
-            "feature": "Agent协作流转",
-            "precondition_text": "分析结果已生成",
-            "steps_text": "进入 Agent 协作页查看状态和消息流",
-            "expected_text": "看到需求分析 -> DRG -> 文档生成的消息链路",
-            "priority": "高",
-            "updated_at": timestamp,
-        },
-        {
-            "case_code": "TC-103",
-            "feature": "文档提交",
-            "precondition_text": "文档列表已准备完成",
-            "steps_text": "在提交中心勾选文档并点击确认提交",
-            "expected_text": "生成新的提交记录并更新项目阶段",
+            "case_code": "TC-202",
+            "feature": "无CC/MCC边界场景",
+            "precondition_text": "次诊断编码为空或未命中 CC/MCC 列表",
+            "steps_text": "提交仅包含主诊断与主手术的病例并执行入组",
+            "expected_text": "系统输出无CC/MCC分层结果，并给出明确入组原因说明",
             "priority": "中",
+            "case_category": "边界",
+            "updated_at": timestamp,
+        },
+        {
+            "case_code": "TC-203",
+            "feature": "编码缺失异常场景",
+            "precondition_text": "主诊断编码或主手术编码为空",
+            "steps_text": f"在 {project_name} 的病例录入页提交不完整编码数据",
+            "expected_text": "页面阻止提交并给出字段校验提示，不写入错误病例",
+            "priority": "高",
+            "case_category": "异常",
+            "updated_at": timestamp,
+        },
+        {
+            "case_code": "TC-204",
+            "feature": "虚拟文档接收与提交",
+            "precondition_text": "系统已生成最新需求、架构与测试文档",
+            "steps_text": "在提交中心勾选文档并确认提交",
+            "expected_text": "生成提交批次、落地本地提交清单，并把项目阶段更新为已提交待审核",
+            "priority": "中",
+            "case_category": "正常",
             "updated_at": timestamp,
         },
     ]
@@ -379,13 +762,14 @@ def seed_demo_data() -> None:
     has_project = cursor.execute("SELECT id FROM projects LIMIT 1").fetchone()
     if not has_project:
         created_at = now_str()
+        project_name = "医保DRG智能协同平台"
         cursor.execute(
             """
             INSERT INTO projects (name, owner_name, priority, phase, target, description, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                "医保DRG智能协同平台",
+                project_name,
                 "王医生",
                 "高",
                 "需求分析中",
@@ -398,7 +782,7 @@ def seed_demo_data() -> None:
         project_id = cursor.lastrowid
 
         analysis_payload = build_analysis_payload(
-            "医保DRG智能协同平台",
+            project_name,
             "围绕住院病例信息、DRG规则匹配、多Agent协作与文档生成展开。",
             "输出需求分析、架构设计、测试用例和提交记录。",
             "高",
@@ -420,60 +804,167 @@ def seed_demo_data() -> None:
         )
 
         drg_cases = [
-            (project_id, "CASE-001", "张某某", "急性阑尾炎", "GB15", "已完成", "低", "主要诊断明确，手术路径清晰。", created_at),
-            (project_id, "CASE-002", "李某某", "肺部感染伴并发症", "EB23", "分析中", "中", "需补充合并症编码和住院天数。", created_at),
-            (project_id, "CASE-003", "赵某某", "糖尿病足感染", "KT11", "待复核", "高", "治疗路径复杂，建议复核手术与并发症信息。", created_at),
+            build_case_record(
+                "CASE-001",
+                "张某某",
+                "患者主诊断为 A01.002+G01，次诊断 J96.0，主要手术 38.1000X002。",
+                "A01.002+G01",
+                "伤寒性脑膜炎",
+                ["J96.0"],
+                "38.1000X002",
+                "动脉内膜剥脱术",
+                created_at,
+            ),
+            build_case_record(
+                "CASE-002",
+                "李某某",
+                "患者主诊断 J18.9，次诊断 E87.1，无主手术编码，按内科治疗流程入组。",
+                "J18.9",
+                "肺部感染",
+                ["E87.1"],
+                "",
+                "内科治疗",
+                created_at,
+            ),
+            build_case_record(
+                "CASE-003",
+                "赵某某",
+                "患者主诊断 E11.621，主要手术 86.2200，暂无有效并发症编码。",
+                "E11.621",
+                "糖尿病足感染",
+                [],
+                "86.2200",
+                "清创术",
+                created_at,
+            ),
         ]
         cursor.executemany(
             """
-            INSERT INTO drg_cases (project_id, case_code, patient_name, diagnosis, drg_code, status, risk_level, note, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO drg_cases (
+                project_id,
+                case_code,
+                patient_name,
+                diagnosis,
+                drg_code,
+                status,
+                risk_level,
+                note,
+                created_at,
+                record_text,
+                primary_diagnosis_code,
+                primary_diagnosis_name,
+                secondary_diagnosis_codes_json,
+                procedure_code,
+                procedure_name,
+                mdc_code,
+                mdc_name,
+                adrg_code,
+                adrg_name,
+                drg_name,
+                complication_level,
+                group_reason,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            drg_cases,
+            [
+                (
+                    project_id,
+                    item["case_code"],
+                    item["patient_name"],
+                    item["diagnosis"],
+                    item["drg_code"],
+                    item["status"],
+                    item["risk_level"],
+                    item["note"],
+                    item["created_at"],
+                    item["record_text"],
+                    item["primary_diagnosis_code"],
+                    item["primary_diagnosis_name"],
+                    item["secondary_diagnosis_codes_json"],
+                    item["procedure_code"],
+                    item["procedure_name"],
+                    item["mdc_code"],
+                    item["mdc_name"],
+                    item["adrg_code"],
+                    item["adrg_name"],
+                    item["drg_name"],
+                    item["complication_level"],
+                    item["group_reason"],
+                    item["updated_at"],
+                )
+                for item in drg_cases
+            ],
         )
 
+        generated_agents = build_agents_payload(project_name, analysis_payload, drg_cases, False)
         agent_rows = [
             (project_id, item["name"], item["owner"], item["status"], item["focus"], created_at)
-            for item in build_agents_payload()
+            for item in generated_agents
         ]
         cursor.executemany(
             "INSERT INTO agents (project_id, name, owner, status, focus, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
             agent_rows,
         )
 
+        generated_messages = build_messages_payload(project_name, analysis_payload, drg_cases)
         message_rows = [
             (project_id, item["sender"], item["receiver"], item["content"], item["source"], item["created_at"])
-            for item in build_messages_payload("医保DRG智能协同平台")
+            for item in generated_messages
         ]
         cursor.executemany(
             "INSERT INTO messages (project_id, sender, receiver, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             message_rows,
         )
 
+        generated_documents = build_documents_payload(project_name, analysis_payload, drg_cases)
         document_rows = [
-            (project_id, item["title"], item["status"], item["version"], item["content"], item["updated_at"])
-            for item in build_documents_payload("医保DRG智能协同平台", analysis_payload)
+            (
+                project_id,
+                item["title"],
+                item["status"],
+                item["version"],
+                item["content"],
+                item["updated_at"],
+                item["source_agent"],
+                item["storage_path"],
+                item["received_at"],
+            )
+            for item in generated_documents
         ]
         cursor.executemany(
-            "INSERT INTO documents (project_id, title, status, version, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents (project_id, title, status, version, content, updated_at, source_agent, storage_path, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             document_rows,
         )
 
+        generated_test_cases = build_test_cases_payload(project_name, drg_cases)
         test_rows = [
-            (project_id, item["case_code"], item["feature"], item["precondition_text"], item["steps_text"], item["expected_text"], item["priority"], item["updated_at"])
-            for item in build_test_cases_payload("医保DRG智能协同平台")
+            (
+                project_id,
+                item["case_code"],
+                item["feature"],
+                item["precondition_text"],
+                item["steps_text"],
+                item["expected_text"],
+                item["priority"],
+                item["case_category"],
+                item["updated_at"],
+            )
+            for item in generated_test_cases
         ]
         cursor.executemany(
             """
-            INSERT INTO test_cases (project_id, case_code, feature, precondition_text, steps_text, expected_text, priority, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO test_cases (project_id, case_code, feature, precondition_text, steps_text, expected_text, priority, case_category, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             test_rows,
         )
 
+        submission_batch_name = "实验二初始提交批次"
+        submission_artifact_path = write_submission_artifact(submission_batch_name, "王医生", generated_documents[:2], created_at)
         cursor.execute(
-            "INSERT INTO submissions (project_id, batch_name, status, docs_count, operator_name, submitted_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (project_id, "实验二初始提交批次", "待审核", 2, "王医生", created_at),
+            "INSERT INTO submissions (project_id, batch_name, status, docs_count, operator_name, submitted_at, artifact_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (project_id, submission_batch_name, "待审核", 2, "王医生", created_at, submission_artifact_path),
         )
         cursor.execute(
             "INSERT INTO mobile_reports (project_id, title, content, priority, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -520,15 +1011,47 @@ def get_documents(project_id: int) -> list[dict[str, Any]]:
             "title": row["title"],
             "status": row["status"],
             "version": row["version"],
+            "content": row["content"],
             "content_lines": row["content"].split("\n"),
             "updated_at": row["updated_at"],
+            "source_agent": row["source_agent"],
+            "storage_path": row["storage_path"],
+            "received_at": row["received_at"],
         }
         for row in rows
     ]
 
 
-def get_drg_cases(project_id: int) -> list[sqlite3.Row]:
-    return fetch_all("SELECT * FROM drg_cases WHERE project_id = ? ORDER BY id", (project_id,))
+def get_drg_cases(project_id: int) -> list[dict[str, Any]]:
+    rows = fetch_all("SELECT * FROM drg_cases WHERE project_id = ? ORDER BY id", (project_id,))
+    return [
+        {
+            "id": row["id"],
+            "case_code": row["case_code"],
+            "patient_name": row["patient_name"],
+            "diagnosis": row["diagnosis"],
+            "drg_code": row["drg_code"],
+            "drg_name": row["drg_name"],
+            "status": row["status"],
+            "risk_level": row["risk_level"],
+            "note": row["note"],
+            "record_text": row["record_text"],
+            "primary_diagnosis_code": row["primary_diagnosis_code"],
+            "primary_diagnosis_name": row["primary_diagnosis_name"],
+            "secondary_diagnosis_codes": loads(row["secondary_diagnosis_codes_json"]),
+            "procedure_code": row["procedure_code"],
+            "procedure_name": row["procedure_name"],
+            "mdc_code": row["mdc_code"],
+            "mdc_name": row["mdc_name"],
+            "adrg_code": row["adrg_code"],
+            "adrg_name": row["adrg_name"],
+            "complication_level": row["complication_level"],
+            "group_reason": row["group_reason"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
 
 
 def get_agents(project_id: int) -> list[sqlite3.Row]:
@@ -592,8 +1115,21 @@ def replace_documents(project_id: int, payload: list[dict[str, str]]) -> None:
     database = get_db()
     database.execute("DELETE FROM documents WHERE project_id = ?", (project_id,))
     database.executemany(
-        "INSERT INTO documents (project_id, title, status, version, content, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [(project_id, item["title"], item["status"], item["version"], item["content"], item["updated_at"]) for item in payload],
+        "INSERT INTO documents (project_id, title, status, version, content, updated_at, source_agent, storage_path, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                project_id,
+                item["title"],
+                item["status"],
+                item["version"],
+                item["content"],
+                item["updated_at"],
+                item["source_agent"],
+                item["storage_path"],
+                item["received_at"],
+            )
+            for item in payload
+        ],
     )
 
 
@@ -602,8 +1138,8 @@ def replace_test_cases(project_id: int, payload: list[dict[str, str]]) -> None:
     database.execute("DELETE FROM test_cases WHERE project_id = ?", (project_id,))
     database.executemany(
         """
-        INSERT INTO test_cases (project_id, case_code, feature, precondition_text, steps_text, expected_text, priority, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO test_cases (project_id, case_code, feature, precondition_text, steps_text, expected_text, priority, case_category, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -614,6 +1150,7 @@ def replace_test_cases(project_id: int, payload: list[dict[str, str]]) -> None:
                 item["steps_text"],
                 item["expected_text"],
                 item["priority"],
+                item["case_category"],
                 item["updated_at"],
             )
             for item in payload
@@ -622,10 +1159,12 @@ def replace_test_cases(project_id: int, payload: list[dict[str, str]]) -> None:
 
 
 def sync_generated_content(project_id: int, project_name: str, analysis_payload: dict[str, list[str]]) -> None:
-    replace_agents(project_id, build_agents_payload())
-    replace_messages(project_id, build_messages_payload(project_name))
-    replace_documents(project_id, build_documents_payload(project_name, analysis_payload))
-    replace_test_cases(project_id, build_test_cases_payload(project_name))
+    drg_cases = get_drg_cases(project_id)
+    submissions = get_submissions(project_id)
+    replace_agents(project_id, build_agents_payload(project_name, analysis_payload, drg_cases, bool(submissions)))
+    replace_messages(project_id, build_messages_payload(project_name, analysis_payload, drg_cases))
+    replace_documents(project_id, build_documents_payload(project_name, analysis_payload, drg_cases))
+    replace_test_cases(project_id, build_test_cases_payload(project_name, drg_cases))
 
 
 def login_required(view):
@@ -850,15 +1389,116 @@ def analysis():
     )
 
 
-@app.route("/cases")
+@app.route("/cases", methods=["GET", "POST"])
 @login_required
 def cases_page():
     project = get_project()
+    form_data = {
+        "patient_name": "",
+        "record_text": "",
+        "primary_diagnosis_code": "",
+        "primary_diagnosis_name": "",
+        "secondary_diagnosis_codes": "",
+        "procedure_code": "",
+        "procedure_name": "",
+    }
+    if request.method == "POST":
+        patient_name = request.form.get("patient_name", "").strip()
+        record_text = request.form.get("record_text", "").strip()
+        primary_diagnosis_code = normalize_medical_code(request.form.get("primary_diagnosis_code", ""))
+        primary_diagnosis_name = request.form.get("primary_diagnosis_name", "").strip()
+        secondary_diagnosis_raw = request.form.get("secondary_diagnosis_codes", "").strip()
+        procedure_code = normalize_medical_code(request.form.get("procedure_code", ""))
+        procedure_name = request.form.get("procedure_name", "").strip()
+        form_data = {
+            "patient_name": patient_name,
+            "record_text": record_text,
+            "primary_diagnosis_code": primary_diagnosis_code,
+            "primary_diagnosis_name": primary_diagnosis_name,
+            "secondary_diagnosis_codes": secondary_diagnosis_raw,
+            "procedure_code": procedure_code,
+            "procedure_name": procedure_name,
+        }
+        validation_error = validate_required_text("患者姓名", patient_name, MAX_PATIENT_NAME_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("电子病历摘要", record_text, MAX_RECORD_TEXT_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("主诊断编码", primary_diagnosis_code, MAX_MEDICAL_CODE_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("主诊断名称", primary_diagnosis_name, MAX_MEDICAL_NAME_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("主手术编码", procedure_code, MAX_MEDICAL_CODE_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("主手术名称", procedure_name, MAX_MEDICAL_NAME_LENGTH)
+        if validation_error is not None:
+            flash(validation_error, "warning")
+        else:
+            secondary_codes = parse_code_list(secondary_diagnosis_raw)
+            next_case_number = fetch_one("SELECT COUNT(*) AS count FROM drg_cases WHERE project_id = ?", (project["id"],))["count"] + 1
+            case_record = build_case_record(
+                f"CASE-{next_case_number:03d}",
+                patient_name,
+                record_text,
+                primary_diagnosis_code,
+                primary_diagnosis_name,
+                secondary_codes,
+                procedure_code,
+                procedure_name,
+            )
+            database = get_db()
+            database.execute(
+                """
+                INSERT INTO drg_cases (
+                    project_id, case_code, patient_name, diagnosis, drg_code, status, risk_level, note, created_at,
+                    record_text, primary_diagnosis_code, primary_diagnosis_name, secondary_diagnosis_codes_json,
+                    procedure_code, procedure_name, mdc_code, mdc_name, adrg_code, adrg_name, drg_name,
+                    complication_level, group_reason, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    project["id"],
+                    case_record["case_code"],
+                    case_record["patient_name"],
+                    case_record["diagnosis"],
+                    case_record["drg_code"],
+                    case_record["status"],
+                    case_record["risk_level"],
+                    case_record["note"],
+                    case_record["created_at"],
+                    case_record["record_text"],
+                    case_record["primary_diagnosis_code"],
+                    case_record["primary_diagnosis_name"],
+                    case_record["secondary_diagnosis_codes_json"],
+                    case_record["procedure_code"],
+                    case_record["procedure_name"],
+                    case_record["mdc_code"],
+                    case_record["mdc_name"],
+                    case_record["adrg_code"],
+                    case_record["adrg_name"],
+                    case_record["drg_name"],
+                    case_record["complication_level"],
+                    case_record["group_reason"],
+                    case_record["updated_at"],
+                ),
+            )
+            database.execute(
+                "UPDATE projects SET phase = ?, updated_at = ? WHERE id = ?",
+                ("DRG入组已更新", now_str(), project["id"]),
+            )
+            sync_generated_content(project["id"], project["name"], get_analysis(project["id"]))
+            database.commit()
+            flash(f"病例 {case_record['case_code']} 已完成本地教学规则入组。", "success")
+            return redirect(url_for("cases_page"))
+
+    drg_cases = get_drg_cases(project["id"])
     return render_template(
         "cases.html",
         page_key="cases",
         project=project,
-        drg_cases=get_drg_cases(project["id"]),
+        drg_cases=drg_cases,
+        latest_case=get_latest_case(drg_cases),
+        form_data=form_data,
     )
 
 
@@ -898,7 +1538,7 @@ def documents_page():
 def tests_page():
     project = get_project()
     if request.method == "POST":
-        payload = build_test_cases_payload(project["name"])
+        payload = build_test_cases_payload(project["name"], get_drg_cases(project["id"]))
         replace_test_cases(project["id"], payload)
         get_db().commit()
         flash("测试用例已按当前项目上下文重新生成。", "success")
@@ -930,26 +1570,39 @@ def submit_page():
         if not valid_selected_ids:
             flash("请选择当前项目中的有效文档后再提交。", "warning")
             return redirect(url_for("submit_page"))
+        selected_documents = [item for item in documents if item["id"] in selected_id_set]
+        submitted_at = now_str()
+        batch_name = f"{project['name']} 提交批次 {datetime.now().strftime('%m%d-%H%M')}"
+        artifact_path = write_submission_artifact(batch_name, g.user["username"], selected_documents, submitted_at)
         database = get_db()
         placeholders = ",".join("?" for _ in valid_selected_ids)
         database.execute(
             f"UPDATE documents SET status = ?, updated_at = ? WHERE id IN ({placeholders})",
-            tuple(["已提交", now_str(), *valid_selected_ids]),
+            tuple(["已提交", submitted_at, *valid_selected_ids]),
         )
         database.execute(
             "UPDATE projects SET phase = ?, updated_at = ? WHERE id = ?",
-            ("已提交待审核", now_str(), project["id"]),
+            ("已提交待审核", submitted_at, project["id"]),
         )
         database.execute(
-            "INSERT INTO submissions (project_id, batch_name, status, docs_count, operator_name, submitted_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO submissions (project_id, batch_name, status, docs_count, operator_name, submitted_at, artifact_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 project["id"],
-                f"{project['name']} 提交批次 {datetime.now().strftime('%m%d-%H%M')}",
+                batch_name,
                 "已提交",
                 len(valid_selected_ids),
                 g.user["username"],
-                now_str(),
+                submitted_at,
+                artifact_path,
             ),
+        )
+        analysis_payload = get_analysis(project["id"])
+        drg_cases = get_drg_cases(project["id"])
+        replace_agents(project["id"], build_agents_payload(project["name"], analysis_payload, drg_cases, True))
+        replace_messages(project["id"], build_messages_payload(project["name"], analysis_payload, drg_cases))
+        database.execute(
+            "INSERT INTO messages (project_id, sender, receiver, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (project["id"], "提交 Agent", "虚拟文档系统", f"批次 {batch_name} 已提交，提交清单已写入 {artifact_path}。", "desktop", submitted_at),
         )
         database.commit()
         flash("提交成功，已生成新的提交记录。", "success")
@@ -972,7 +1625,10 @@ def mobile_home():
     documents = get_documents(project["id"])
     submissions = get_submissions(project["id"])
     messages = get_messages(project["id"])
+    drg_cases = get_drg_cases(project["id"])
+    latest_case = get_latest_case(drg_cases)
     tasks = [
+        f"最新DRG结果：{latest_case['drg_code']}" if latest_case else "暂无DRG入组结果",
         f"查看最新文档版本：{documents[0]['version']}" if documents else "暂无文档",
         f"当前处理阶段：{project['phase']}",
         f"最近消息来源：{messages[0]['sender']}" if messages else "暂无消息",

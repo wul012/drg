@@ -6,20 +6,102 @@
 <header class="topbar">
     <div>
         <h1>DRG规则匹配与病例分析</h1>
-        <p>这一页保留项目的业务特征，用于展示病例、DRG分组、风险等级与说明。</p>
+        <p>在这里录入电子病历摘要、主诊断、次诊断和主手术编码，系统会按内置教学规则输出 MDC、ADRG 和 DRG 结果。</p>
     </div>
     <div class="topbar-actions">
         <span class="badge">病例数：{{ drg_cases|length }}</span>
     </div>
 </header>
 
+<section class="panel-grid two-columns case-entry-layout">
+    <article class="panel">
+        <div class="panel-header compact-header">
+            <div>
+                <span class="section-tag">病例录入</span>
+                <h3>提交新的电子病历</h3>
+            </div>
+            <a class="text-link" href="{{ url_for('analysis') }}">返回需求分析</a>
+        </div>
+        <form class="form-grid" method="post">
+            <div class="field">
+                <label for="patient_name">患者姓名</label>
+                <input class="input" id="patient_name" name="patient_name" type="text" value="{{ form_data['patient_name'] }}" required />
+            </div>
+            <div class="field">
+                <label for="record_text">电子病历摘要</label>
+                <textarea class="textarea" id="record_text" name="record_text" required>{{ form_data['record_text'] }}</textarea>
+            </div>
+            <div class="form-row two-columns-row">
+                <div class="field">
+                    <label for="primary_diagnosis_code">主诊断编码</label>
+                    <input class="input" id="primary_diagnosis_code" name="primary_diagnosis_code" type="text" value="{{ form_data['primary_diagnosis_code'] }}" required />
+                </div>
+                <div class="field">
+                    <label for="primary_diagnosis_name">主诊断名称</label>
+                    <input class="input" id="primary_diagnosis_name" name="primary_diagnosis_name" type="text" value="{{ form_data['primary_diagnosis_name'] }}" required />
+                </div>
+            </div>
+            <div class="form-row two-columns-row">
+                <div class="field">
+                    <label for="secondary_diagnosis_codes">次诊断编码列表</label>
+                    <input class="input" id="secondary_diagnosis_codes" name="secondary_diagnosis_codes" type="text" value="{{ form_data['secondary_diagnosis_codes'] }}" placeholder="例如：J96.0, E87.1" />
+                </div>
+                <div class="field">
+                    <label for="procedure_code">主手术编码</label>
+                    <input class="input" id="procedure_code" name="procedure_code" type="text" value="{{ form_data['procedure_code'] }}" required />
+                </div>
+            </div>
+            <div class="field">
+                <label for="procedure_name">主手术名称</label>
+                <input class="input" id="procedure_name" name="procedure_name" type="text" value="{{ form_data['procedure_name'] }}" required />
+            </div>
+            <div class="form-actions">
+                <button class="button" type="submit">执行DRG入组</button>
+                <a class="button-secondary" href="{{ url_for('tests_page') }}">查看测试覆盖</a>
+            </div>
+        </form>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header compact-header">
+            <div>
+                <span class="section-tag">最近结果</span>
+                <h3>最新DRG入组输出</h3>
+            </div>
+            {% if latest_case %}
+                <span class="status-tag {% if latest_case['status'] == '已完成' %}success{% elif latest_case['risk_level'] == '高' %}danger{% else %}warning{% endif %}">{{ latest_case['status'] }}</span>
+            {% endif %}
+        </div>
+        {% if latest_case %}
+            <div class="info-list">
+                <div class="info-row"><strong>病例编号</strong><span>{{ latest_case['case_code'] }}</span></div>
+                <div class="info-row"><strong>患者姓名</strong><span>{{ latest_case['patient_name'] }}</span></div>
+                <div class="info-row"><strong>MDC</strong><span>{{ latest_case['mdc_code'] }} · {{ latest_case['mdc_name'] }}</span></div>
+                <div class="info-row"><strong>ADRG</strong><span>{{ latest_case['adrg_code'] }} · {{ latest_case['adrg_name'] }}</span></div>
+                <div class="info-row"><strong>DRG</strong><span>{{ latest_case['drg_code'] }} · {{ latest_case['drg_name'] }}</span></div>
+                <div class="info-row"><strong>并发症层级</strong><span>{{ latest_case['complication_level'] }}</span></div>
+                <div class="info-row"><strong>风险等级</strong><span>{{ latest_case['risk_level'] }}</span></div>
+            </div>
+            <div class="item-card simple-item-card case-reason-card">
+                <h4>入组原因说明</h4>
+                <p>{{ latest_case['group_reason'] }}</p>
+            </div>
+        {% else %}
+            <div class="empty-state">当前还没有病例数据，请先录入一条电子病历进行教学版 DRG 入组。</div>
+        {% endif %}
+    </article>
+</section>
+
 <section class="panel">
-    <div class="panel-header">
-        <h3>病例列表</h3>
-        <a class="text-link" href="{{ url_for('analysis') }}">返回需求分析</a>
+    <div class="panel-header compact-header">
+        <div>
+            <span class="section-tag">历史记录</span>
+            <h3>病例列表</h3>
+        </div>
+        <span class="badge">本地规则驱动</span>
     </div>
     <div class="list-stack spaced-stack">
-        {% for item in drg_cases %}
+        {% for item in drg_cases|reverse %}
             <div class="item-card">
                 <div class="item-card-top wrap-top">
                     <div>
@@ -29,7 +111,9 @@
                     <span class="status-tag {% if item['status'] == '已完成' %}success{% elif item['risk_level'] == '高' %}danger{% else %}warning{% endif %}">{{ item['status'] }}</span>
                 </div>
                 <div class="info-list compact-info-list">
-                    <div class="info-row"><strong>DRG分组</strong><span>{{ item['drg_code'] }}</span></div>
+                    <div class="info-row"><strong>分组链路</strong><span>{{ item['mdc_code'] }} → {{ item['adrg_code'] }} → {{ item['drg_code'] }}</span></div>
+                    <div class="info-row"><strong>DRG组名</strong><span>{{ item['drg_name'] }}</span></div>
+                    <div class="info-row"><strong>次诊断</strong><span>{{ item['secondary_diagnosis_codes']|join('、') if item['secondary_diagnosis_codes'] else '无' }}</span></div>
                     <div class="info-row"><strong>风险等级</strong><span>{{ item['risk_level'] }}</span></div>
                     <div class="info-row"><strong>说明</strong><span>{{ item['note'] }}</span></div>
                 </div>

@@ -105,6 +105,40 @@ def run_smoke_tests() -> None:
             assert analysis_response.status_code == 200
             assert_contains(analysis_response.get_data(as_text=True), "需求分析已完成")
 
+            invalid_case_response = client.post(
+                "/cases",
+                data={
+                    "patient_name": "张三",
+                    "record_text": "病例摘要",
+                    "primary_diagnosis_code": "",
+                    "primary_diagnosis_name": "伤寒性脑膜炎",
+                    "secondary_diagnosis_codes": "J96.0",
+                    "procedure_code": "38.1000X002",
+                    "procedure_name": "动脉内膜剥脱术",
+                },
+                follow_redirects=True,
+            )
+            assert_contains(invalid_case_response.get_data(as_text=True), "主诊断编码不能为空。")
+
+            case_response = client.post(
+                "/cases",
+                data={
+                    "patient_name": "张三",
+                    "record_text": "患者主诊断 A01.002+G01，次诊断 J96.0，主要手术 38.1000X002。",
+                    "primary_diagnosis_code": "A01.002+G01",
+                    "primary_diagnosis_name": "伤寒性脑膜炎",
+                    "secondary_diagnosis_codes": "J96.0",
+                    "procedure_code": "38.1000X002",
+                    "procedure_name": "动脉内膜剥脱术",
+                },
+                follow_redirects=True,
+            )
+            assert case_response.status_code == 200
+            case_body = case_response.get_data(as_text=True)
+            assert_contains(case_body, "已完成本地教学规则入组")
+            assert_contains(case_body, "MDC")
+            assert_contains(case_body, "DRG")
+
             first_document_id = get_first_document_id()
             submit_response = client.post(
                 "/submit",

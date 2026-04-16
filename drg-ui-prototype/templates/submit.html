@@ -6,7 +6,7 @@
 <header class="topbar">
     <div>
         <h1>虚拟文档系统提交中心</h1>
-        <p>在这里完成文档勾选、批次生成和提交留痕。</p>
+        <p>在这里完成文档勾选、批次生成、提交清单落盘和虚拟文档系统留痕。</p>
     </div>
     <div class="topbar-actions">
         <span class="badge">主流程终点</span>
@@ -32,6 +32,7 @@
                             <span>
                                 <strong>{{ item['title'] }}</strong>
                                 <small>{{ item['version'] }} · {{ item['updated_at'] }} · {{ item['status'] }}</small>
+                                <small>来源：{{ item['source_agent'] }} · 路径：{{ item['storage_path'] }}</small>
                             </span>
                             <input type="checkbox" name="document_ids" value="{{ item['id'] }}" checked />
                         </label>
@@ -60,6 +61,7 @@
                         </div>
                         <p>操作人：{{ item['operator_name'] }}</p>
                         <p>文档数：{{ item['docs_count'] }} · 提交时间：{{ item['submitted_at'] }}</p>
+                        <p>提交清单：{{ item['artifact_path'] }}</p>
                     </div>
                 {% endfor %}
             </div>

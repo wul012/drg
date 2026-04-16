@@ -6,7 +6,7 @@
 <header class="topbar">
     <div>
         <h1>文档自动生成中心</h1>
-        <p>文档内容来自数据库，并会随着需求分析提交而刷新。</p>
+        <p>文档会按本地模板自动生成，写入数据库，并同步落到虚拟文档系统目录。</p>
     </div>
     <div class="topbar-actions">
         <a class="button-secondary" href="{{ url_for('tests_page') }}">进入测试中心</a>
@@ -26,6 +26,7 @@
                         <span class="status-tag {% if item['status'] == '已生成' or item['status'] == '已提交' %}success{% elif item['status'] == '待更新' %}warning{% endif %}">{{ item['status'] }}</span>
                     </div>
                     <p>{{ item['version'] }} · {{ item['updated_at'] }}</p>
+                    <p>来源：{{ item['source_agent'] }} · 接收时间：{{ item['received_at'] }}</p>
                 </a>
             {% endfor %}
         </div>
@@ -39,6 +40,11 @@
                     <p>{{ selected_document['version'] }} · {{ selected_document['updated_at'] }}</p>
                 </div>
                 <a class="button-secondary" href="{{ url_for('submit_page') }}">进入提交中心</a>
+            </div>
+            <div class="info-list compact-info-list">
+                <div class="info-row"><strong>来源智能体</strong><span>{{ selected_document['source_agent'] }}</span></div>
+                <div class="info-row"><strong>接收时间</strong><span>{{ selected_document['received_at'] }}</span></div>
+                <div class="info-row"><strong>本地存储</strong><span>{{ selected_document['storage_path'] }}</span></div>
             </div>
             <div class="document-lines">
                 {% for line in selected_document['content_lines'] %}

@@ -6,7 +6,7 @@
 <header class="topbar">
     <div>
         <h1>测试用例中心</h1>
-        <p>测试用例会基于当前项目上下文生成并存入数据库。</p>
+        <p>测试用例会基于当前项目上下文、DRG规则和最近病例结果生成并存入数据库。</p>
     </div>
     <div class="topbar-actions">
         <form method="post">
@@ -26,6 +26,7 @@
             <thead>
             <tr>
                 <th>编号</th>
+                <th>类别</th>
                 <th>功能点</th>
                 <th>前置条件</th>
                 <th>测试步骤</th>
@@ -37,6 +38,7 @@
             {% for item in test_cases %}
                 <tr>
                     <td>{{ item['case_code'] }}</td>
+                    <td><span class="status-tag {% if item['case_category'] == '异常' %}danger{% elif item['case_category'] == '边界' %}warning{% else %}success{% endif %}">{{ item['case_category'] }}</span></td>
                     <td>{{ item['feature'] }}</td>
                     <td>{{ item['precondition_text'] }}</td>
                     <td>{{ item['steps_text'] }}</td>

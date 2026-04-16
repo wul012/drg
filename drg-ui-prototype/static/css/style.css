@@ -103,6 +103,11 @@ code {
     align-items: start;
 }
 
+.case-entry-layout {
+    grid-template-columns: 1.02fr 0.98fr;
+    align-items: start;
+}
+
 .board-grid {
     grid-template-columns: 0.95fr 1.15fr 0.9fr;
 }
@@ -1000,6 +1005,20 @@ textarea::placeholder {
     border: 1px solid var(--border);
     background: #fbfdff;
     line-height: 1.8;
+}
+
+.case-reason-card {
+    margin-top: 18px;
+}
+
+.case-reason-card h4 {
+    margin-bottom: 10px;
+}
+
+.case-reason-card p {
+    margin: 0;
+    color: var(--text-soft);
+    line-height: 1.85;
 }
 
 .table-wrapper {
