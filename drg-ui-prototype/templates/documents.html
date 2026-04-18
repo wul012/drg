@@ -39,7 +39,12 @@
                     <h3>{{ selected_document['title'] }}</h3>
                     <p>{{ selected_document['version'] }} · {{ selected_document['updated_at'] }}</p>
                 </div>
-                <a class="button-secondary" href="{{ url_for('submit_page') }}">进入提交中心</a>
+                <div class="panel-header-actions">
+                    {% if selected_document['storage_path'] %}
+                        <a class="button-secondary" href="{{ url_for('download_document', document_id=selected_document['id']) }}">下载原文件</a>
+                    {% endif %}
+                    <a class="button-secondary" href="{{ url_for('submit_page') }}">进入提交中心</a>
+                </div>
             </div>
             <div class="info-list compact-info-list">
                 <div class="info-row"><strong>来源智能体</strong><span>{{ selected_document['source_agent'] }}</span></div>

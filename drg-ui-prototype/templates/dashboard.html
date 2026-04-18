@@ -90,6 +90,64 @@
     </article>
 </section>
 
+<section class="panel dashboard-distribution-panel">
+    <div class="panel-header compact-header">
+        <div>
+            <span class="section-tag">洞察</span>
+            <h3>DRG 入组分布</h3>
+        </div>
+        <span class="badge">基于本地教学规则</span>
+    </div>
+    {% if case_count %}
+        <div class="distribution-grid">
+            <div class="distribution-column">
+                <h4>MDC 大类分布</h4>
+                <div class="distribution-bars">
+                    {% for entry in distributions['mdc'] %}
+                        <div class="distribution-item">
+                            <div class="distribution-meta">
+                                <strong>{{ entry['label'] }}</strong>
+                                <span>{{ entry['count'] }} 例 · {{ entry['percent'] }}%</span>
+                            </div>
+                            <div class="distribution-track"><span style="width: {{ entry['percent'] }}%"></span></div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="distribution-column">
+                <h4>风险等级分布</h4>
+                <div class="distribution-bars">
+                    {% for entry in distributions['risk'] %}
+                        <div class="distribution-item">
+                            <div class="distribution-meta">
+                                <strong>{{ entry['label'] }}</strong>
+                                <span>{{ entry['count'] }} 例 · {{ entry['percent'] }}%</span>
+                            </div>
+                            <div class="distribution-track distribution-track-{{ 'danger' if entry['label'] == '高' else ('warning' if entry['label'] == '中' else 'success') }}"><span style="width: {{ entry['percent'] }}%"></span></div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="distribution-column">
+                <h4>状态分布</h4>
+                <div class="distribution-bars">
+                    {% for entry in distributions['status'] %}
+                        <div class="distribution-item">
+                            <div class="distribution-meta">
+                                <strong>{{ entry['label'] }}</strong>
+                                <span>{{ entry['count'] }} 例 · {{ entry['percent'] }}%</span>
+                            </div>
+                            <div class="distribution-track distribution-track-{{ 'success' if entry['label'] == '已完成' else ('warning' if entry['label'] == '分析中' else 'danger') }}"><span style="width: {{ entry['percent'] }}%"></span></div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty-state">暂无病例入组数据，请先到 DRG 分析页录入病例。</div>
+    {% endif %}
+</section>
+
 <section class="panel-grid two-columns dashboard-panel-grid">
     <article class="panel">
         <div class="panel-header compact-header">

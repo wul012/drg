@@ -98,10 +98,32 @@
             <span class="section-tag">历史记录</span>
             <h3>病例列表</h3>
         </div>
-        <span class="badge">本地规则驱动</span>
+        <span class="badge">共 {{ all_case_count }} 条 · 命中 {{ drg_cases|length }} 条</span>
     </div>
+    <form class="case-filter-bar" method="get" action="{{ url_for('cases_page') }}">
+        <label class="case-filter-field">
+            <span>MDC</span>
+            <select name="mdc">
+                <option value="">全部大类</option>
+                {% for option in mdc_catalog %}
+                    <option value="{{ option['mdc_code'] }}" {% if option['mdc_code'] == filter_data['mdc'] %}selected{% endif %}>{{ option['mdc_code'] }} · {{ option['mdc_name'] }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="case-filter-field case-filter-keyword">
+            <span>关键词</span>
+            <input class="input" type="text" name="q" value="{{ filter_data['q'] }}" placeholder="病例编号 / 患者 / 主诊断 / 手术" />
+        </label>
+        <div class="case-filter-actions">
+            <button class="button" type="submit">筛选</button>
+            {% if filter_data['mdc'] or filter_data['q'] %}
+                <a class="button-secondary" href="{{ url_for('cases_page') }}">重置</a>
+            {% endif %}
+        </div>
+    </form>
     <div class="list-stack spaced-stack">
-        {% for item in drg_cases|reverse %}
+        {% if drg_cases %}
+            {% for item in drg_cases|reverse %}
             <div class="item-card">
                 <div class="item-card-top wrap-top">
                     <div>
@@ -117,8 +139,16 @@
                     <div class="info-row"><strong>风险等级</strong><span>{{ item['risk_level'] }}</span></div>
                     <div class="info-row"><strong>说明</strong><span>{{ item['note'] }}</span></div>
                 </div>
+                {% if can_manage_cases %}
+                    <form class="case-action-row" method="post" action="{{ url_for('delete_case', case_id=item['id']) }}" onsubmit="return confirm('确认撤销病例 {{ item['case_code'] }} 吗？此操作会同步刷新下游文档与测试用例。');">
+                        <button class="button-danger" type="submit">撤销该病例</button>
+                    </form>
+                {% endif %}
             </div>
-        {% endfor %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">当前筛选条件下没有命中的病例，请调整 MDC 或关键词后重试。</div>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

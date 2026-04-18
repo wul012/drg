@@ -4,7 +4,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from app import app, get_documents, get_project, init_database, seed_demo_data
+from app import app, get_documents, get_drg_cases, get_project, init_database, seed_demo_data
 
 
 def bootstrap_test_database() -> tuple[Path, str, bool]:
@@ -139,6 +139,64 @@ def run_smoke_tests() -> None:
             assert_contains(case_body, "MDC")
             assert_contains(case_body, "DRG")
 
+            circulatory_case_response = client.post(
+                "/cases",
+                data={
+                    "patient_name": "李四",
+                    "record_text": "患者主诊断 I21.0 急性心肌梗死，次诊断 I10，执行冠状动脉搭桥术。",
+                    "primary_diagnosis_code": "I21.0",
+                    "primary_diagnosis_name": "急性心肌梗死",
+                    "secondary_diagnosis_codes": "I10",
+                    "procedure_code": "36.10",
+                    "procedure_name": "冠状动脉搭桥术",
+                },
+                follow_redirects=True,
+            )
+            assert circulatory_case_response.status_code == 200
+            circulatory_body = circulatory_case_response.get_data(as_text=True)
+            assert_contains(circulatory_body, "MDCE")
+            assert_contains(circulatory_body, "FB1")
+
+            filter_hit_response = client.get("/cases?mdc=MDCE&q=%E5%BF%83")
+            assert filter_hit_response.status_code == 200
+            filter_hit_body = filter_hit_response.get_data(as_text=True)
+            assert_contains(filter_hit_body, "急性心肌梗死")
+            assert "张某某" not in filter_hit_body
+
+            filter_miss_response = client.get("/cases?mdc=MDCE&q=thiswillnothit")
+            assert filter_miss_response.status_code == 200
+            assert_contains(
+                filter_miss_response.get_data(as_text=True),
+                "当前筛选条件下没有命中的病例",
+            )
+
+            first_document_id_for_download = get_first_document_id()
+            download_response = client.get(f"/documents/{first_document_id_for_download}/download")
+            assert download_response.status_code == 200
+            content_disposition = download_response.headers.get("Content-Disposition", "")
+            assert "attachment" in content_disposition, content_disposition
+            assert len(download_response.data) > 0
+
+            invalid_download_response = client.get("/documents/999999/download")
+            assert invalid_download_response.status_code == 404
+
+            with app.app_context():
+                project = get_project()
+                cases_before_delete = get_drg_cases(project["id"])
+            assert cases_before_delete, "Expected at least one DRG case before deletion."
+            target_case_id = cases_before_delete[-1]["id"]
+            delete_response = client.post(
+                f"/cases/{target_case_id}/delete",
+                follow_redirects=True,
+            )
+            assert delete_response.status_code == 200
+            assert_contains(delete_response.get_data(as_text=True), "已成功删除")
+            with app.app_context():
+                cases_after_delete = get_drg_cases(project["id"])
+            assert len(cases_after_delete) == len(cases_before_delete) - 1, (
+                f"Expected {len(cases_before_delete) - 1} cases after deletion, got {len(cases_after_delete)}"
+            )
+
             first_document_id = get_first_document_id()
             submit_response = client.post(
                 "/submit",
@@ -147,6 +205,35 @@ def run_smoke_tests() -> None:
             )
             assert submit_response.status_code == 200
             assert_contains(submit_response.get_data(as_text=True), "提交成功")
+
+            client.get("/logout", follow_redirects=True)
+            client.post(
+                "/login",
+                data={"username": "tester01", "password": "123456"},
+                follow_redirects=True,
+            )
+            with app.app_context():
+                project = get_project()
+                remaining_cases = get_drg_cases(project["id"])
+            assert remaining_cases, "Expected remaining DRG cases for permission test."
+            forbidden_case_id = remaining_cases[0]["id"]
+            forbidden_response = client.post(
+                f"/cases/{forbidden_case_id}/delete",
+                follow_redirects=True,
+            )
+            assert forbidden_response.status_code == 200
+            assert_contains(forbidden_response.get_data(as_text=True), "没有执行该操作的权限")
+            with app.app_context():
+                cases_after_forbidden = get_drg_cases(project["id"])
+            assert len(cases_after_forbidden) == len(remaining_cases), (
+                "Non-admin role should not be able to delete cases."
+            )
+            client.get("/logout", follow_redirects=True)
+            client.post(
+                "/login",
+                data={"username": "admin", "password": "123456"},
+                follow_redirects=True,
+            )
 
             invalid_mobile_report_response = client.post(
                 "/mobile/report",

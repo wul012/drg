@@ -9,7 +9,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, flash, g, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -57,6 +57,16 @@ SIMPLIFIED_MDC_RULES = [
         "mdc_code": "MDCF",
         "mdc_name": "内分泌与代谢系统疾病大类",
         "diagnosis_prefixes": ["E10", "E11", "E14", "L97"],
+    },
+    {
+        "mdc_code": "MDCE",
+        "mdc_name": "循环系统疾病大类",
+        "diagnosis_prefixes": ["I20", "I21", "I25", "I50"],
+    },
+    {
+        "mdc_code": "MDCL",
+        "mdc_name": "泌尿系统疾病大类",
+        "diagnosis_prefixes": ["N17", "N18", "N20", "N39"],
     },
 ]
 SIMPLIFIED_ADRG_RULES = {
@@ -112,6 +122,34 @@ SIMPLIFIED_ADRG_RULES = {
         {
             "adrg_code": "KZ1",
             "adrg_name": "代谢系统内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+    "MDCE": [
+        {
+            "adrg_code": "FB1",
+            "adrg_name": "冠状动脉搭桥手术组",
+            "procedure_prefixes": ["36.10", "36.11", "36.12", "36.15"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "FZ1",
+            "adrg_name": "循环系统内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+    "MDCL": [
+        {
+            "adrg_code": "LB1",
+            "adrg_name": "肾与尿道手术组",
+            "procedure_prefixes": ["55.01", "55.04", "56.0", "56.1"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "LZ1",
+            "adrg_name": "泌尿系统内科治疗组",
             "procedure_prefixes": [],
             "supports_complication": True,
         },
@@ -1090,6 +1128,54 @@ def get_stats(project_id: int) -> dict[str, int]:
     }
 
 
+def get_mdc_catalog() -> list[dict[str, str]]:
+    return [{"mdc_code": rule["mdc_code"], "mdc_name": rule["mdc_name"]} for rule in SIMPLIFIED_MDC_RULES]
+
+
+def filter_drg_cases(cases: list[dict[str, Any]], mdc_code: str, keyword: str) -> list[dict[str, Any]]:
+    filtered = cases
+    if mdc_code:
+        filtered = [item for item in filtered if item["mdc_code"] == mdc_code]
+    if keyword:
+        lowered = keyword.lower()
+        filtered = [
+            item
+            for item in filtered
+            if lowered in (item.get("case_code") or "").lower()
+            or lowered in (item.get("patient_name") or "").lower()
+            or lowered in (item.get("diagnosis") or "").lower()
+            or lowered in (item.get("primary_diagnosis_code") or "").lower()
+            or lowered in (item.get("primary_diagnosis_name") or "").lower()
+            or lowered in (item.get("procedure_code") or "").lower()
+            or lowered in (item.get("procedure_name") or "").lower()
+        ]
+    return filtered
+
+
+def compute_distribution(items: list[dict[str, Any]], key: str, fallback_label: str = "未分类") -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for item in items:
+        value = (item.get(key) or fallback_label) or fallback_label
+        counts[value] = counts.get(value, 0) + 1
+    total = sum(counts.values()) or 1
+    return [
+        {
+            "label": label,
+            "count": count,
+            "percent": round(count * 100 / total, 1),
+        }
+        for label, count in sorted(counts.items(), key=lambda entry: entry[1], reverse=True)
+    ]
+
+
+def get_case_distributions(cases: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "mdc": compute_distribution(cases, "mdc_code"),
+        "risk": compute_distribution(cases, "risk_level"),
+        "status": compute_distribution(cases, "status"),
+    }
+
+
 def replace_agents(project_id: int, payload: list[dict[str, str]]) -> None:
     database = get_db()
     database.execute("DELETE FROM agents WHERE project_id = ?", (project_id,))
@@ -1177,6 +1263,22 @@ def login_required(view):
     return wrapped_view
 
 
+def role_required(*allowed_roles: str):
+    def decorator(view):
+        @wraps(view)
+        def wrapped_view(**kwargs):
+            if g.user is None:
+                return redirect(url_for("login"))
+            if g.user["role"] not in allowed_roles:
+                flash("当前账号没有执行该操作的权限。", "warning")
+                return redirect(request.referrer or url_for("dashboard"))
+            return view(**kwargs)
+
+        return wrapped_view
+
+    return decorator
+
+
 @app.before_request
 def load_logged_in_user() -> None:
     user_id = session.get("user_id")
@@ -1191,7 +1293,11 @@ def load_logged_in_user() -> None:
 
 @app.context_processor
 def inject_globals() -> dict[str, Any]:
-    return {"current_user": g.get("user")}
+    user = g.get("user")
+    return {
+        "current_user": user,
+        "can_manage_cases": bool(user is not None and user["role"] == "管理员"),
+    }
 
 
 @app.route("/favicon.ico")
@@ -1284,6 +1390,8 @@ def dashboard():
     messages = get_messages(project["id"])
     submissions = get_submissions(project["id"])
     documents = get_documents(project["id"])
+    drg_cases = get_drg_cases(project["id"])
+    distributions = get_case_distributions(drg_cases)
     timeline = [
         f"当前项目阶段：{project['phase']}",
         f"最近文档版本：{documents[0]['version']}" if documents else "暂无文档",
@@ -1297,6 +1405,8 @@ def dashboard():
         stats=stats,
         timeline=timeline,
         recent_messages=messages[:4],
+        case_count=len(drg_cases),
+        distributions=distributions,
     )
 
 
@@ -1492,14 +1602,57 @@ def cases_page():
             return redirect(url_for("cases_page"))
 
     drg_cases = get_drg_cases(project["id"])
+    mdc_filter = request.args.get("mdc", "").strip().upper()
+    keyword = request.args.get("q", "").strip()
+    mdc_catalog = get_mdc_catalog()
+    valid_mdc_codes = {entry["mdc_code"] for entry in mdc_catalog}
+    applied_mdc = mdc_filter if mdc_filter in valid_mdc_codes else ""
+    filtered_cases = filter_drg_cases(drg_cases, applied_mdc, keyword)
     return render_template(
         "cases.html",
         page_key="cases",
         project=project,
-        drg_cases=drg_cases,
+        drg_cases=filtered_cases,
+        all_case_count=len(drg_cases),
         latest_case=get_latest_case(drg_cases),
         form_data=form_data,
+        mdc_catalog=mdc_catalog,
+        filter_data={"mdc": applied_mdc, "q": keyword},
     )
+
+
+@app.route("/cases/<int:case_id>/delete", methods=["POST"])
+@role_required("管理员")
+def delete_case(case_id: int):
+    project = get_project()
+    case_row = fetch_one(
+        "SELECT case_code FROM drg_cases WHERE id = ? AND project_id = ?",
+        (case_id, project["id"]),
+    )
+    if case_row is None:
+        flash("未找到对应病例，可能已被删除。", "warning")
+        return redirect(url_for("cases_page"))
+    database = get_db()
+    database.execute("DELETE FROM drg_cases WHERE id = ? AND project_id = ?", (case_id, project["id"]))
+    database.execute(
+        "INSERT INTO messages (project_id, sender, receiver, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            project["id"],
+            "DRG 分析 Agent",
+            "需求分析 Agent",
+            f"管理员 {g.user['username']} 已撤销病例 {case_row['case_code']}，请刷新下游数据。",
+            "desktop",
+            now_str(),
+        ),
+    )
+    database.execute(
+        "UPDATE projects SET phase = ?, updated_at = ? WHERE id = ?",
+        ("DRG入组已更新", now_str(), project["id"]),
+    )
+    sync_generated_content(project["id"], project["name"], get_analysis(project["id"]))
+    database.commit()
+    flash(f"病例 {case_row['case_code']} 已成功删除。", "success")
+    return redirect(url_for("cases_page"))
 
 
 @app.route("/agents")
@@ -1512,6 +1665,34 @@ def agents_page():
         project=project,
         agents=get_agents(project["id"]),
         messages=get_messages(project["id"]),
+    )
+
+
+@app.route("/documents/<int:document_id>/download")
+@login_required
+def download_document(document_id: int):
+    project = get_project()
+    document = fetch_one(
+        "SELECT title, version, storage_path FROM documents WHERE id = ? AND project_id = ?",
+        (document_id, project["id"]),
+    )
+    if document is None or not document["storage_path"]:
+        abort(404)
+    storage_path = Path(document["storage_path"])
+    if not storage_path.is_absolute():
+        storage_path = BASE_DIR / storage_path
+    try:
+        storage_path.resolve().relative_to(VIRTUAL_DOCS_DIR.resolve())
+    except ValueError:
+        abort(404)
+    if not storage_path.is_file():
+        abort(404)
+    download_name = f"{sanitize_filename(document['title'])}_{sanitize_filename(document['version'])}.txt"
+    return send_from_directory(
+        VIRTUAL_DOCS_DIR,
+        storage_path.name,
+        as_attachment=True,
+        download_name=download_name,
     )
 
 
