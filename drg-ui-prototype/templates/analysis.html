@@ -6,10 +6,11 @@
 <header class="topbar">
     <div>
         <h1>项目需求分析</h1>
-        <p>这里会把项目需求真正写入数据库，并联动更新文档、Agent与测试中心。</p>
+        <p>这里会把项目需求真正写入数据库，并联动更新文档、Agent与测试中心，同时驱动本地微型LLM生成结果刷新。</p>
     </div>
     <div class="topbar-actions">
         <span class="badge">主流程第一站</span>
+        <span class="badge">本地微型LLM · {{ local_llm_runtime['label'] }}</span>
     </div>
 </header>
 
@@ -50,6 +51,14 @@
                     </select>
                 </div>
             </div>
+            <div class="field">
+                <label for="llm_mode">本地生成模式</label>
+                <select class="input" id="llm_mode" name="llm_mode">
+                    {% for option in local_llm_mode_options %}
+                        <option value="{{ option['value'] }}" {% if form_data['llm_mode'] == option['value'] %}selected{% endif %}>{{ option['label'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="form-actions">
                 <button class="button" type="submit">开始分析并同步数据</button>
                 <a class="button-secondary" href="{{ url_for('agents_page') }}">进入 Agent 协作</a>
@@ -60,7 +69,10 @@
     <article class="panel analysis-result-panel">
         <div class="panel-header analysis-panel-header">
             <h3>分析结果区</h3>
-            <span class="status-tag analysis-status-tag">更新时间：{{ analysis['updated_at'] }}</span>
+            <div class="panel-header-actions">
+                <span class="status-tag analysis-status-tag">更新时间：{{ analysis['updated_at'] }}</span>
+                <span class="status-tag analysis-status-tag">{{ local_llm_runtime['label'] }}</span>
+            </div>
         </div>
         <div class="result-grid analysis-result-grid">
             <div class="item-card analysis-result-card analysis-summary-card">

@@ -6,9 +6,10 @@
 <header class="topbar">
     <div>
         <h1>测试用例中心</h1>
-        <p>测试用例会基于当前项目上下文、DRG规则和最近病例结果生成并存入数据库。</p>
+        <p>测试用例会基于当前项目上下文、DRG规则、最近病例结果和本地微型LLM模式生成并存入数据库。</p>
     </div>
     <div class="topbar-actions">
+        <span class="badge">本地微型LLM · {{ local_llm_runtime['label'] }}</span>
         <form method="post">
             <button class="button-secondary" type="submit">重新生成用例</button>
         </form>

@@ -86,6 +86,7 @@ def run_smoke_tests() -> None:
                     "target": "测试目标产物",
                     "priority": "高",
                     "doc_type": "完整提交包",
+                    "llm_mode": "strict",
                 },
                 follow_redirects=True,
             )
@@ -99,11 +100,15 @@ def run_smoke_tests() -> None:
                     "target": "生成完整提交包并留痕",
                     "priority": "高",
                     "doc_type": "完整提交包",
+                    "llm_mode": "creative",
                 },
                 follow_redirects=True,
             )
             assert analysis_response.status_code == 200
-            assert_contains(analysis_response.get_data(as_text=True), "需求分析已完成")
+            analysis_body = analysis_response.get_data(as_text=True)
+            assert_contains(analysis_body, "需求分析已完成")
+            assert_contains(analysis_body, "本地微型LLM")
+            assert_contains(analysis_body, "增强模式")
 
             invalid_case_response = client.post(
                 "/cases",
@@ -138,6 +143,7 @@ def run_smoke_tests() -> None:
             assert_contains(case_body, "已完成本地教学规则入组")
             assert_contains(case_body, "MDC")
             assert_contains(case_body, "DRG")
+            assert_contains(case_body, "本地微型LLM")
 
             circulatory_case_response = client.post(
                 "/cases",

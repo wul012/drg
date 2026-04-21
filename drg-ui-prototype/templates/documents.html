@@ -6,9 +6,10 @@
 <header class="topbar">
     <div>
         <h1>文档自动生成中心</h1>
-        <p>文档会按本地模板自动生成，写入数据库，并同步落到虚拟文档系统目录。</p>
+        <p>文档会按本地微型LLM + 结构约束自动生成，写入数据库，并同步落到虚拟文档系统目录。</p>
     </div>
     <div class="topbar-actions">
+        <span class="badge">本地微型LLM · {{ local_llm_runtime['label'] }}</span>
         <a class="button-secondary" href="{{ url_for('tests_page') }}">进入测试中心</a>
     </div>
 </header>
@@ -49,6 +50,7 @@
             <div class="info-list compact-info-list">
                 <div class="info-row"><strong>来源智能体</strong><span>{{ selected_document['source_agent'] }}</span></div>
                 <div class="info-row"><strong>接收时间</strong><span>{{ selected_document['received_at'] }}</span></div>
+                <div class="info-row"><strong>生成模式</strong><span>{{ local_llm_runtime['label'] }}</span></div>
                 <div class="info-row"><strong>本地存储</strong><span>{{ selected_document['storage_path'] }}</span></div>
             </div>
             <div class="document-lines">

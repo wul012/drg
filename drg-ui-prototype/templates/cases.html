@@ -83,7 +83,10 @@
                 <div class="info-row"><strong>风险等级</strong><span>{{ latest_case['risk_level'] }}</span></div>
             </div>
             <div class="item-card simple-item-card case-reason-card">
-                <h4>入组原因说明</h4>
+                <div class="item-card-top wrap-top">
+                    <h4>入组原因说明</h4>
+                    <span class="status-tag">本地微型LLM · {{ local_llm_runtime['label'] }}</span>
+                </div>
                 <p>{{ latest_case['group_reason'] }}</p>
             </div>
         {% elif filter_data['active'] %}

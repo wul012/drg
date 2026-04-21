@@ -10,7 +10,17 @@ from pathlib import Path
 from typing import Any
 
 import drg_case_utils as case_utils
-from flask import Flask, abort, flash, g, redirect, render_template, request, send_from_directory, session, url_for
+from local_llm import (
+    generate_analysis_payload,
+    generate_document_contents,
+    generate_drg_reason,
+    generate_test_cases,
+    get_default_generation_mode,
+    get_generation_mode_options,
+    get_local_llm_runtime,
+    normalize_generation_mode,
+)
+from flask import Flask, abort, flash, g, has_request_context, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -159,6 +169,12 @@ SIMPLIFIED_ADRG_RULES = {
 SIMPLIFIED_MCC_CODES = {"J96", "I50", "N17", "R57", "A41"}
 SIMPLIFIED_CC_CODES = {"E87", "D64", "I10", "N39", "J18"}
 SIMPLIFIED_EXCLUDED_CC_MCC = {"Z00", "Z01"}
+
+
+def get_current_local_llm_mode() -> str:
+    if has_request_context():
+        return normalize_generation_mode(session.get("local_llm_mode", get_default_generation_mode()))
+    return get_default_generation_mode()
 
 
 def now_str() -> str:
@@ -358,28 +374,38 @@ def group_drg_case(
     complication_result = detect_complication_level(primary_diagnosis_code, secondary_codes)
     suffix = {"MCC": "1", "CC": "3", "无CC/MCC": "5"}.get(complication_result["level"], "9")
     drg_code = f"{adrg_result['adrg_code']}{suffix}"
+    drg_name = build_drg_name(adrg_result["adrg_name"], complication_result["level"])
     status = "已完成" if mdc_result["mdc_code"] != "MDCQ" and adrg_result["adrg_code"] != "QZ1" else "需复核"
     risk_level = "高" if complication_result["level"] == "MCC" or status == "需复核" else "中" if complication_result["level"] == "CC" else "低"
-    reason_parts = [
-        f"主诊断 {primary_diagnosis_code}（{primary_diagnosis_name}）命中 {mdc_result['mdc_code']} {mdc_result['mdc_name']}。",
-        f"主手术 {procedure_code or '未填写'}（{procedure_name or '未填写'}）归入 {adrg_result['adrg_code']} {adrg_result['adrg_name']}。",
+    group_reason = generate_drg_reason(
+        primary_diagnosis_code,
+        primary_diagnosis_name,
+        procedure_code,
+        procedure_name,
+        mdc_result["mdc_code"],
+        mdc_result["mdc_name"],
+        adrg_result["adrg_code"],
+        adrg_result["adrg_name"],
+        drg_code,
+        drg_name,
+        complication_result["level"],
         complication_result["reason"],
-    ]
-    if raw_record:
-        reason_parts.append("电子病历摘要已纳入本地教学规则匹配。")
-    if status != "已完成":
-        reason_parts.append("当前结果未命中完整教学规则，建议人工复核。")
+        risk_level,
+        status,
+        raw_record,
+        mode=get_current_local_llm_mode(),
+    )
     return {
         "mdc_code": mdc_result["mdc_code"],
         "mdc_name": mdc_result["mdc_name"],
         "adrg_code": adrg_result["adrg_code"],
         "adrg_name": adrg_result["adrg_name"],
         "drg_code": drg_code,
-        "drg_name": build_drg_name(adrg_result["adrg_name"], complication_result["level"]),
+        "drg_name": drg_name,
         "complication_level": complication_result["level"],
         "risk_level": risk_level,
         "status": status,
-        "group_reason": "；".join(reason_parts),
+        "group_reason": group_reason,
     }
 
 
@@ -589,32 +615,7 @@ def init_database() -> None:
 
 
 def build_analysis_payload(project_name: str, description: str, target: str, priority: str, doc_type: str) -> dict[str, list[str]]:
-    focus = f"{description} {target}".strip().replace("\n", " ")
-    short_focus = focus[:40] if focus else "DRG规则匹配与文档生成"
-    return {
-        "summary": [
-            f"围绕“{project_name}”，当前优先处理 {short_focus}。",
-            f"项目优先级为{priority}，当前目标文档类型为{doc_type}。",
-            "建议采用PC端主导分析、移动端承载快速上报与查看的协同模式。",
-        ],
-        "modules": [
-            "需求分析中心",
-            "DRG规则匹配中心",
-            "多Agent协作中心",
-            "文档生成中心",
-            "测试与提交中心",
-        ],
-        "risks": [
-            "病例编码和病案摘要不完整会影响DRG分组准确性。",
-            "Agent状态同步不清晰会造成任务链路中断。",
-            "提交前如果文档版本不一致，会影响最终演示效果。",
-        ],
-        "recommendations": [
-            "优先保证需求分析 -> 文档生成 -> 提交中心这一主流程闭环。",
-            "将移动端收敛为上报、消息、文档查看三个高频场景。",
-            "把当前阶段、最新文档和最近提交记录集中展示在工作台首页。",
-        ],
-    }
+    return generate_analysis_payload(project_name, description, target, priority, doc_type, mode=get_current_local_llm_mode())
 
 
 def get_latest_case(drg_cases: list[Any]) -> Any | None:
@@ -674,11 +675,7 @@ def build_messages_payload(project_name: str, analysis_payload: dict[str, list[s
 def build_documents_payload(project_name: str, analysis_payload: dict[str, list[str]], drg_cases: list[Any]) -> list[dict[str, str]]:
     timestamp = now_str()
     latest_case = get_latest_case(drg_cases)
-    latest_case_lines = [
-        f"最新病例：{latest_case['case_code']} / {latest_case['patient_name']}",
-        f"入组结果：{latest_case['mdc_code']} -> {latest_case['adrg_code']} -> {latest_case['drg_code']}",
-        f"入组说明：{latest_case['group_reason']}",
-    ] if latest_case else ["当前暂无病例入组结果，文档基于需求分析上下文生成。"]
+    generated_contents = generate_document_contents(project_name, analysis_payload, latest_case, mode=get_current_local_llm_mode())
     payload = [
         {
             "title": "需求分析文档",
@@ -686,14 +683,7 @@ def build_documents_payload(project_name: str, analysis_payload: dict[str, list[
             "version": "V2.0",
             "updated_at": timestamp,
             "source_agent": "需求分析 Agent",
-            "content": "\n".join(
-                [
-                    f"一、项目名称：{project_name}",
-                    f"二、需求摘要：{'；'.join(analysis_payload['summary'])}",
-                    f"三、建议模块：{'、'.join(analysis_payload['modules'])}",
-                    f"四、风险识别：{'；'.join(analysis_payload['risks'])}",
-                ]
-            ),
+            "content": generated_contents["需求分析文档"],
         },
         {
             "title": "架构设计文档",
@@ -701,14 +691,7 @@ def build_documents_payload(project_name: str, analysis_payload: dict[str, list[
             "version": "V2.0",
             "updated_at": timestamp,
             "source_agent": "文档生成 Agent",
-            "content": "\n".join(
-                [
-                    "一、系统采用 Flask + SQLite 的本地可运行架构。",
-                    "二、PC端包括工作台、需求分析、DRG入组、Agent、文档、测试和提交中心。",
-                    "三、移动端包括上报、消息和文档查看，并与桌面端消息流联动。",
-                    *latest_case_lines,
-                ]
-            ),
+            "content": generated_contents["架构设计文档"],
         },
         {
             "title": "测试文档",
@@ -716,13 +699,7 @@ def build_documents_payload(project_name: str, analysis_payload: dict[str, list[
             "version": "V2.0",
             "updated_at": timestamp,
             "source_agent": "测试用例 Agent",
-            "content": "\n".join(
-                [
-                    f"一、重点覆盖 {project_name} 的主业务链路与 DRG 入组闭环。",
-                    "二、覆盖正常入组、无 CC/MCC 边界场景以及编码缺失异常场景。",
-                    "三、覆盖虚拟文档系统接收、提交中心留痕和移动端上报同步。",
-                ]
-            ),
+            "content": generated_contents["测试文档"],
         },
     ]
     for item in payload:
@@ -733,51 +710,7 @@ def build_documents_payload(project_name: str, analysis_payload: dict[str, list[
 
 def build_test_cases_payload(project_name: str, drg_cases: list[Any]) -> list[dict[str, str]]:
     timestamp = now_str()
-    latest_case = get_latest_case(drg_cases)
-    latest_case_code = latest_case["case_code"] if latest_case else "CASE-DEMO"
-    latest_case_drg = latest_case["drg_code"] if latest_case else "GD15"
-    return [
-        {
-            "case_code": "TC-201",
-            "feature": "DRG入组正常场景",
-            "precondition_text": "已录入完整电子病历、主诊断、次诊断和主手术编码",
-            "steps_text": f"提交病例 {latest_case_code} 并执行本地教学规则入组",
-            "expected_text": f"成功输出 MDC / ADRG / DRG，且最新病例结果展示为 {latest_case_drg}",
-            "priority": "高",
-            "case_category": "正常",
-            "updated_at": timestamp,
-        },
-        {
-            "case_code": "TC-202",
-            "feature": "无CC/MCC边界场景",
-            "precondition_text": "次诊断编码为空或未命中 CC/MCC 列表",
-            "steps_text": "提交仅包含主诊断与主手术的病例并执行入组",
-            "expected_text": "系统输出无CC/MCC分层结果，并给出明确入组原因说明",
-            "priority": "中",
-            "case_category": "边界",
-            "updated_at": timestamp,
-        },
-        {
-            "case_code": "TC-203",
-            "feature": "编码缺失异常场景",
-            "precondition_text": "主诊断编码或主手术编码为空",
-            "steps_text": f"在 {project_name} 的病例录入页提交不完整编码数据",
-            "expected_text": "页面阻止提交并给出字段校验提示，不写入错误病例",
-            "priority": "高",
-            "case_category": "异常",
-            "updated_at": timestamp,
-        },
-        {
-            "case_code": "TC-204",
-            "feature": "虚拟文档接收与提交",
-            "precondition_text": "系统已生成最新需求、架构与测试文档",
-            "steps_text": "在提交中心勾选文档并确认提交",
-            "expected_text": "生成提交批次、落地本地提交清单，并把项目阶段更新为已提交待审核",
-            "priority": "中",
-            "case_category": "正常",
-            "updated_at": timestamp,
-        },
-    ]
+    return [{**item, "updated_at": timestamp} for item in generate_test_cases(project_name, drg_cases, mode=get_current_local_llm_mode())]
 
 
 def seed_demo_data() -> None:
@@ -1247,9 +1180,12 @@ def load_logged_in_user() -> None:
 @app.context_processor
 def inject_globals() -> dict[str, Any]:
     user = g.get("user")
+    active_mode = get_current_local_llm_mode()
     return {
         "current_user": user,
         "can_manage_cases": bool(user is not None and user["role"] == "管理员"),
+        "local_llm_runtime": get_local_llm_runtime(active_mode),
+        "local_llm_mode_options": get_generation_mode_options(),
     }
 
 
@@ -1373,6 +1309,7 @@ def analysis():
         "target": project["target"],
         "priority": project["priority"],
         "doc_type": "完整提交包",
+        "llm_mode": get_current_local_llm_mode(),
     }
     if request.method == "POST":
         project_name = request.form.get("project_name", project["name"]).strip() or project["name"]
@@ -1380,12 +1317,14 @@ def analysis():
         target = request.form.get("target", project["target"]).strip() or project["target"]
         priority = normalize_choice(request.form.get("priority", project["priority"]), VALID_PRIORITIES, project["priority"])
         doc_type = normalize_choice(request.form.get("doc_type", "完整提交包"), VALID_DOC_TYPES, "完整提交包")
+        llm_mode = normalize_generation_mode(request.form.get("llm_mode", get_current_local_llm_mode()))
         form_data = {
             "project_name": project_name,
             "description": description,
             "target": target,
             "priority": priority,
             "doc_type": doc_type,
+            "llm_mode": llm_mode,
         }
         validation_error = validate_required_text("项目名称", project_name, MAX_PROJECT_NAME_LENGTH)
         if validation_error is None:
@@ -1395,6 +1334,7 @@ def analysis():
         if validation_error is not None:
             flash(validation_error, "warning")
         else:
+            session["local_llm_mode"] = llm_mode
             analysis_payload = build_analysis_payload(project_name, description, target, priority, doc_type)
             database = get_db()
             database.execute(
