@@ -1019,7 +1019,7 @@ textarea::placeholder {
 
 .case-filter-bar {
     display: grid;
-    grid-template-columns: 220px 1fr auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
     align-items: end;
     margin-bottom: 18px;
@@ -1049,6 +1049,41 @@ textarea::placeholder {
 .case-filter-actions {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.case-filter-keyword {
+    grid-column: span 2;
+}
+
+.case-results-meta {
+    margin: -4px 0 18px;
+    color: var(--text-soft);
+    font-size: 13px;
+}
+
+.case-pagination {
+    margin-top: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.case-pagination-pages {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.case-page-current {
+    pointer-events: none;
+}
+
+.button-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .panel-header-actions {
@@ -1127,8 +1162,16 @@ textarea::placeholder {
         grid-template-columns: 1fr;
     }
 
+    .case-filter-keyword {
+        grid-column: auto;
+    }
+
     .distribution-grid {
         grid-template-columns: 1fr;
+    }
+
+    .case-pagination {
+        justify-content: flex-start;
     }
 }
 

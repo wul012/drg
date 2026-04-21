@@ -9,7 +9,7 @@
         <p>在这里录入电子病历摘要、主诊断、次诊断和主手术编码，系统会按内置教学规则输出 MDC、ADRG 和 DRG 结果。</p>
     </div>
     <div class="topbar-actions">
-        <span class="badge">病例数：{{ drg_cases|length }}</span>
+        <span class="badge">病例总数：{{ all_case_count }}</span>
     </div>
 </header>
 
@@ -87,7 +87,7 @@
                 <p>{{ latest_case['group_reason'] }}</p>
             </div>
         {% elif filter_data['active'] %}
-            <div class="empty-state">当前筛选条件下没有可展示的最新病例结果，请调整 MDC 或关键词后重试。</div>
+            <div class="empty-state">当前筛选条件下没有可展示的最新病例结果，请调整筛选项（MDC、风险等级、状态或关键词）后重试。</div>
         {% else %}
             <div class="empty-state">当前还没有病例数据，请先录入一条电子病历进行教学版 DRG 入组。</div>
         {% endif %}
@@ -100,7 +100,7 @@
             <span class="section-tag">历史记录</span>
             <h3>病例列表</h3>
         </div>
-        <span class="badge">共 {{ all_case_count }} 条 · 命中 {{ drg_cases|length }} 条</span>
+        <span class="badge">共 {{ all_case_count }} 条 · 命中 {{ filtered_case_count }} 条</span>
     </div>
     <form class="case-filter-bar" method="get" action="{{ url_for('cases_page') }}">
         <label class="case-filter-field">
@@ -112,20 +112,51 @@
                 {% endfor %}
             </select>
         </label>
+        <label class="case-filter-field">
+            <span>风险等级</span>
+            <select name="risk">
+                <option value="">全部风险</option>
+                {% for option in risk_options %}
+                    <option value="{{ option['value'] }}" {% if option['value'] == filter_data['risk'] %}selected{% endif %}>{{ option['label'] }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="case-filter-field">
+            <span>状态</span>
+            <select name="status">
+                <option value="">全部状态</option>
+                {% for option in status_options %}
+                    <option value="{{ option['value'] }}" {% if option['value'] == filter_data['status'] %}selected{% endif %}>{{ option['label'] }}</option>
+                {% endfor %}
+            </select>
+        </label>
         <label class="case-filter-field case-filter-keyword">
             <span>关键词</span>
             <input class="input" type="text" name="q" value="{{ filter_data['q'] }}" placeholder="病例编号 / 患者 / 主诊断 / 手术" />
         </label>
+        <label class="case-filter-field">
+            <span>排序</span>
+            <select name="sort">
+                {% for option in sort_options %}
+                    <option value="{{ option['value'] }}" {% if option['value'] == filter_data['sort'] %}selected{% endif %}>{{ option['label'] }}</option>
+                {% endfor %}
+            </select>
+        </label>
         <div class="case-filter-actions">
             <button class="button" type="submit">筛选</button>
-            {% if filter_data['mdc'] or filter_data['q'] %}
+            {% if filter_data['active'] or filter_data['sort'] != 'created_desc' %}
                 <a class="button-secondary" href="{{ url_for('cases_page') }}">重置</a>
             {% endif %}
         </div>
     </form>
+    {% if filtered_case_count %}
+        <div class="case-results-meta">
+            当前显示第 {{ pagination['start_index'] }} - {{ pagination['end_index'] }} 条，共 {{ filtered_case_count }} 条。
+        </div>
+    {% endif %}
     <div class="list-stack spaced-stack">
         {% if drg_cases %}
-            {% for item in drg_cases|reverse %}
+            {% for item in drg_cases %}
             <div class="item-card">
                 <div class="item-card-top wrap-top">
                     <div>
@@ -149,8 +180,31 @@
             </div>
             {% endfor %}
         {% else %}
-            <div class="empty-state">当前筛选条件下没有命中的病例，请调整 MDC 或关键词后重试。</div>
+            <div class="empty-state">当前筛选条件下没有命中的病例，请调整条件后重试。</div>
         {% endif %}
     </div>
+    {% if pagination['total_pages'] > 1 %}
+        <div class="case-pagination">
+            {% if pagination['has_prev'] %}
+                <a class="button-secondary" href="{{ pagination_urls['prev'] }}">上一页</a>
+            {% else %}
+                <span class="button-secondary button-disabled">上一页</span>
+            {% endif %}
+            <div class="case-pagination-pages">
+                {% for entry in pagination_urls['pages'] %}
+                    {% if entry['active'] %}
+                        <span class="button case-page-current">{{ entry['number'] }}</span>
+                    {% else %}
+                        <a class="button-secondary" href="{{ entry['url'] }}">{{ entry['number'] }}</a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% if pagination['has_next'] %}
+                <a class="button-secondary" href="{{ pagination_urls['next'] }}">下一页</a>
+            {% else %}
+                <span class="button-secondary button-disabled">下一页</span>
+            {% endif %}
+        </div>
+    {% endif %}
 </section>
 {% endblock %}

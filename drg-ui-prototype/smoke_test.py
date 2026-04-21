@@ -167,8 +167,27 @@ def run_smoke_tests() -> None:
             assert filter_miss_response.status_code == 200
             assert_contains(
                 filter_miss_response.get_data(as_text=True),
-                "当前筛选条件下没有命中的病例",
+                "当前筛选条件下没有命中的病例，请调整条件后重试。",
             )
+
+            risk_filter_response = client.get("/cases?risk=%E4%B8%AD&status=%E5%88%86%E6%9E%90%E4%B8%AD")
+            assert risk_filter_response.status_code == 200
+            risk_filter_body = client.get("/cases?risk=%E9%AB%98&status=%E5%B7%B2%E5%AE%8C%E6%88%90").get_data(as_text=True)
+            assert_contains(risk_filter_body, "张三")
+            assert "李四" not in risk_filter_body
+
+            sorted_case_response = client.get("/cases?sort=risk_desc")
+            assert sorted_case_response.status_code == 200
+            sorted_case_body = sorted_case_response.get_data(as_text=True)
+            first_index = sorted_case_body.find("CASE-001")
+            second_index = sorted_case_body.find("CASE-002")
+            assert first_index != -1 and second_index != -1 and first_index < second_index, sorted_case_body
+
+            paged_case_response = client.get("/cases?page=2")
+            assert paged_case_response.status_code == 200
+            paged_case_body = paged_case_response.get_data(as_text=True)
+            assert_contains(paged_case_body, "当前显示第")
+            assert_contains(paged_case_body, "下一页")
 
             first_document_id_for_download = get_first_document_id()
             download_response = client.get(f"/documents/{first_document_id_for_download}/download")

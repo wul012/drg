@@ -9,6 +9,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
+import drg_case_utils as case_utils
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -1128,79 +1129,6 @@ def get_stats(project_id: int) -> dict[str, int]:
     }
 
 
-def get_mdc_catalog() -> list[dict[str, str]]:
-    return [{"mdc_code": rule["mdc_code"], "mdc_name": rule["mdc_name"]} for rule in SIMPLIFIED_MDC_RULES]
-
-
-def filter_drg_cases(cases: list[dict[str, Any]], mdc_code: str, keyword: str) -> list[dict[str, Any]]:
-    filtered = cases
-    if mdc_code:
-        filtered = [item for item in filtered if item["mdc_code"] == mdc_code]
-    if keyword:
-        lowered = keyword.lower()
-        filtered = [
-            item
-            for item in filtered
-            if lowered in (item.get("case_code") or "").lower()
-            or lowered in (item.get("patient_name") or "").lower()
-            or lowered in (item.get("diagnosis") or "").lower()
-            or lowered in (item.get("primary_diagnosis_code") or "").lower()
-            or lowered in (item.get("primary_diagnosis_name") or "").lower()
-            or lowered in (item.get("procedure_code") or "").lower()
-            or lowered in (item.get("procedure_name") or "").lower()
-        ]
-    return filtered
-
-
-def compute_distribution(items: list[dict[str, Any]], key: str, fallback_label: str = "未分类") -> list[dict[str, Any]]:
-    counts: dict[str, int] = {}
-    for item in items:
-        value = (item.get(key) or fallback_label) or fallback_label
-        counts[value] = counts.get(value, 0) + 1
-    total = sum(counts.values()) or 1
-    return [
-        {
-            "label": label,
-            "count": count,
-            "percent": round(count * 100 / total, 1),
-        }
-        for label, count in sorted(counts.items(), key=lambda entry: entry[1], reverse=True)
-    ]
-
-
-def get_distribution_track_class(distribution_type: str, label: str) -> str:
-    if distribution_type == "risk":
-        return {
-            "高": "distribution-track-danger",
-            "中": "distribution-track-warning",
-            "低": "distribution-track-success",
-        }.get(label, "")
-    if distribution_type == "status":
-        return {
-            "已完成": "distribution-track-success",
-            "分析中": "distribution-track-warning",
-        }.get(label, "distribution-track-danger")
-    return ""
-
-
-def decorate_distribution_entries(entries: list[dict[str, Any]], distribution_type: str) -> list[dict[str, Any]]:
-    return [
-        {
-            **entry,
-            "track_class": get_distribution_track_class(distribution_type, entry["label"]),
-        }
-        for entry in entries
-    ]
-
-
-def get_case_distributions(cases: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    return {
-        "mdc": decorate_distribution_entries(compute_distribution(cases, "mdc_code"), "mdc"),
-        "risk": decorate_distribution_entries(compute_distribution(cases, "risk_level"), "risk"),
-        "status": decorate_distribution_entries(compute_distribution(cases, "status"), "status"),
-    }
-
-
 def replace_agents(project_id: int, payload: list[dict[str, str]]) -> None:
     database = get_db()
     database.execute("DELETE FROM agents WHERE project_id = ?", (project_id,))
@@ -1416,7 +1344,7 @@ def dashboard():
     submissions = get_submissions(project["id"])
     documents = get_documents(project["id"])
     drg_cases = get_drg_cases(project["id"])
-    distributions = get_case_distributions(drg_cases)
+    distributions = case_utils.get_case_distributions(drg_cases)
     timeline = [
         f"当前项目阶段：{project['phase']}",
         f"最近文档版本：{documents[0]['version']}" if documents else "暂无文档",
@@ -1628,23 +1556,74 @@ def cases_page():
 
     drg_cases = get_drg_cases(project["id"])
     mdc_filter = request.args.get("mdc", "").strip().upper()
+    risk_filter = request.args.get("risk", "").strip()
+    status_filter = request.args.get("status", "").strip()
     keyword = request.args.get("q", "").strip()
-    mdc_catalog = get_mdc_catalog()
+    sort_value = request.args.get("sort", "created_desc").strip()
+    page = request.args.get("page", type=int) or 1
+    mdc_catalog = case_utils.get_mdc_catalog(SIMPLIFIED_MDC_RULES)
     valid_mdc_codes = {entry["mdc_code"] for entry in mdc_catalog}
-    applied_mdc = mdc_filter if mdc_filter in valid_mdc_codes else ""
-    filtered_cases = filter_drg_cases(drg_cases, applied_mdc, keyword)
-    has_active_filters = bool(applied_mdc or keyword)
+    risk_values = {entry["value"] for entry in case_utils.CASE_RISK_OPTIONS}
+    status_values = {entry["value"] for entry in case_utils.CASE_STATUS_OPTIONS}
+    applied_mdc = case_utils.normalize_case_choice(mdc_filter, valid_mdc_codes)
+    applied_risk = case_utils.normalize_case_choice(risk_filter, risk_values)
+    applied_status = case_utils.normalize_case_choice(status_filter, status_values)
+    applied_sort = case_utils.normalize_case_sort(sort_value)
+    filtered_cases = case_utils.filter_drg_cases(
+        drg_cases,
+        applied_mdc,
+        keyword,
+        applied_risk,
+        applied_status,
+    )
+    sorted_cases = case_utils.sort_drg_cases(filtered_cases, applied_sort)
+    pagination = case_utils.paginate_items(sorted_cases, page)
+    page_cases = pagination["items"]
+    has_active_filters = bool(applied_mdc or keyword or applied_risk or applied_status)
     latest_case_source = filtered_cases if has_active_filters else drg_cases
+    base_query_params = {
+        "mdc": applied_mdc,
+        "risk": applied_risk,
+        "status": applied_status,
+        "q": keyword,
+        "sort": applied_sort,
+    }
+    active_query_params = {key: value for key, value in base_query_params.items() if value and not (key == "sort" and value == "created_desc")}
+    pagination_urls = {
+        "pages": [
+            {
+                "number": number,
+                "url": url_for("cases_page", **active_query_params, page=number) if number > 1 else url_for("cases_page", **active_query_params),
+                "active": number == pagination["page"],
+            }
+            for number in pagination["page_numbers"]
+        ],
+        "prev": url_for("cases_page", **active_query_params, page=pagination["prev_page"]) if pagination["has_prev"] and pagination["prev_page"] > 1 else (url_for("cases_page", **active_query_params) if pagination["has_prev"] else ""),
+        "next": url_for("cases_page", **active_query_params, page=pagination["next_page"]) if pagination["has_next"] else "",
+    }
     return render_template(
         "cases.html",
         page_key="cases",
         project=project,
-        drg_cases=filtered_cases,
+        drg_cases=page_cases,
         all_case_count=len(drg_cases),
+        filtered_case_count=len(sorted_cases),
         latest_case=get_latest_case(latest_case_source),
         form_data=form_data,
         mdc_catalog=mdc_catalog,
-        filter_data={"mdc": applied_mdc, "q": keyword, "active": has_active_filters},
+        risk_options=case_utils.CASE_RISK_OPTIONS,
+        status_options=case_utils.CASE_STATUS_OPTIONS,
+        sort_options=case_utils.CASE_SORT_OPTIONS,
+        pagination=pagination,
+        pagination_urls=pagination_urls,
+        filter_data={
+            "mdc": applied_mdc,
+            "risk": applied_risk,
+            "status": applied_status,
+            "q": keyword,
+            "sort": applied_sort,
+            "active": has_active_filters,
+        },
     )
 
 
