@@ -86,6 +86,8 @@
                 <h4>入组原因说明</h4>
                 <p>{{ latest_case['group_reason'] }}</p>
             </div>
+        {% elif filter_data['active'] %}
+            <div class="empty-state">当前筛选条件下没有可展示的最新病例结果，请调整 MDC 或关键词后重试。</div>
         {% else %}
             <div class="empty-state">当前还没有病例数据，请先录入一条电子病历进行教学版 DRG 入组。</div>
         {% endif %}

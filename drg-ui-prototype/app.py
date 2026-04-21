@@ -1168,11 +1168,36 @@ def compute_distribution(items: list[dict[str, Any]], key: str, fallback_label: 
     ]
 
 
+def get_distribution_track_class(distribution_type: str, label: str) -> str:
+    if distribution_type == "risk":
+        return {
+            "高": "distribution-track-danger",
+            "中": "distribution-track-warning",
+            "低": "distribution-track-success",
+        }.get(label, "")
+    if distribution_type == "status":
+        return {
+            "已完成": "distribution-track-success",
+            "分析中": "distribution-track-warning",
+        }.get(label, "distribution-track-danger")
+    return ""
+
+
+def decorate_distribution_entries(entries: list[dict[str, Any]], distribution_type: str) -> list[dict[str, Any]]:
+    return [
+        {
+            **entry,
+            "track_class": get_distribution_track_class(distribution_type, entry["label"]),
+        }
+        for entry in entries
+    ]
+
+
 def get_case_distributions(cases: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     return {
-        "mdc": compute_distribution(cases, "mdc_code"),
-        "risk": compute_distribution(cases, "risk_level"),
-        "status": compute_distribution(cases, "status"),
+        "mdc": decorate_distribution_entries(compute_distribution(cases, "mdc_code"), "mdc"),
+        "risk": decorate_distribution_entries(compute_distribution(cases, "risk_level"), "risk"),
+        "status": decorate_distribution_entries(compute_distribution(cases, "status"), "status"),
     }
 
 
@@ -1608,16 +1633,18 @@ def cases_page():
     valid_mdc_codes = {entry["mdc_code"] for entry in mdc_catalog}
     applied_mdc = mdc_filter if mdc_filter in valid_mdc_codes else ""
     filtered_cases = filter_drg_cases(drg_cases, applied_mdc, keyword)
+    has_active_filters = bool(applied_mdc or keyword)
+    latest_case_source = filtered_cases if has_active_filters else drg_cases
     return render_template(
         "cases.html",
         page_key="cases",
         project=project,
         drg_cases=filtered_cases,
         all_case_count=len(drg_cases),
-        latest_case=get_latest_case(drg_cases),
+        latest_case=get_latest_case(latest_case_source),
         form_data=form_data,
         mdc_catalog=mdc_catalog,
-        filter_data={"mdc": applied_mdc, "q": keyword},
+        filter_data={"mdc": applied_mdc, "q": keyword, "active": has_active_filters},
     )
 
 
