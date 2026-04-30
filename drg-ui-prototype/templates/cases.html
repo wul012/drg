@@ -34,7 +34,7 @@
             <div class="form-row two-columns-row">
                 <div class="field">
                     <label for="primary_diagnosis_code">主诊断编码</label>
-                    <input class="input" id="primary_diagnosis_code" name="primary_diagnosis_code" type="text" value="{{ form_data['primary_diagnosis_code'] }}" required />
+                    <input class="input" id="primary_diagnosis_code" name="primary_diagnosis_code" type="text" value="{{ form_data['primary_diagnosis_code'] }}" placeholder="可留空：已知样例名称会自动补码" />
                 </div>
                 <div class="field">
                     <label for="primary_diagnosis_name">主诊断名称</label>
@@ -48,7 +48,7 @@
                 </div>
                 <div class="field">
                     <label for="procedure_code">主手术编码</label>
-                    <input class="input" id="procedure_code" name="procedure_code" type="text" value="{{ form_data['procedure_code'] }}" required />
+                    <input class="input" id="procedure_code" name="procedure_code" type="text" value="{{ form_data['procedure_code'] }}" placeholder="可留空：已知样例手术会自动补码" />
                 </div>
             </div>
             <div class="field">

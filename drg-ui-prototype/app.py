@@ -65,6 +65,16 @@ SIMPLIFIED_MDC_RULES = [
         "diagnosis_prefixes": ["K35", "K36", "K80", "K81"],
     },
     {
+        "mdc_code": "MDCG",
+        "mdc_name": "消化道疾病及功能障碍",
+        "diagnosis_prefixes": ["C16"],
+    },
+    {
+        "mdc_code": "MDCH",
+        "mdc_name": "肝、胆、胰疾病及功能障碍",
+        "diagnosis_prefixes": ["K83"],
+    },
+    {
         "mdc_code": "MDCF",
         "mdc_name": "内分泌与代谢系统疾病大类",
         "diagnosis_prefixes": ["E10", "E11", "E14", "L97"],
@@ -123,6 +133,34 @@ SIMPLIFIED_ADRG_RULES = {
             "supports_complication": True,
         },
     ],
+    "MDCG": [
+        {
+            "adrg_code": "GB2",
+            "adrg_name": "胃、十二指肠大手术组",
+            "procedure_prefixes": ["43.7"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "GZ2",
+            "adrg_name": "消化道内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
+    "MDCH": [
+        {
+            "adrg_code": "HC1",
+            "adrg_name": "胆总管手术组",
+            "procedure_prefixes": ["51.63"],
+            "supports_complication": True,
+        },
+        {
+            "adrg_code": "HZ1",
+            "adrg_name": "肝胆胰内科治疗组",
+            "procedure_prefixes": [],
+            "supports_complication": True,
+        },
+    ],
     "MDCF": [
         {
             "adrg_code": "KD1",
@@ -138,6 +176,12 @@ SIMPLIFIED_ADRG_RULES = {
         },
     ],
     "MDCE": [
+        {
+            "adrg_code": "EC2",
+            "adrg_name": "纵隔、气管、胸壁其他手术组",
+            "procedure_prefixes": ["34.82"],
+            "supports_complication": True,
+        },
         {
             "adrg_code": "FB1",
             "adrg_name": "冠状动脉搭桥手术组",
@@ -168,7 +212,39 @@ SIMPLIFIED_ADRG_RULES = {
 }
 SIMPLIFIED_MCC_CODES = {"J96", "I50", "N17", "R57", "A41"}
 SIMPLIFIED_CC_CODES = {"E87", "D64", "I10", "N39", "J18"}
+SIMPLIFIED_CC_EXACT_CODES = {"K66.002"}
 SIMPLIFIED_EXCLUDED_CC_MCC = {"Z00", "Z01"}
+SPECIAL_MDC_BY_PRIMARY_CODE = {
+    "J86.000X013": {
+        "mdc_code": "MDCE",
+        "mdc_name": "呼吸系统疾病及功能障碍",
+    },
+}
+DIAGNOSIS_NAME_CODE_MAP = {
+    "胃窦恶性肿瘤": "C16.301",
+    "肠粘连": "K66.002",
+    "胃术后": "Z98.800X108",
+    "腔隙性脑梗死": "I63.801",
+    "肝囊肿": "K76.807",
+    "支气管胆管瘘": "J86.000X013",
+    "肝内胆管癌": "C22.100",
+    "肝术后": "Z98.800X115",
+    "胆管狭窄": "K83.105",
+    "梗阻性黄疸": "K83.109",
+    "胆管扩张": "K83.807",
+    "腹腔粘连": "K66.007",
+    "更换胆管引流管": "Z43.402",
+}
+PROCEDURE_NAME_CODE_MAP = {
+    "腹腔镜胃大部切除伴胃空肠吻合术": "43.7X03",
+    "膈肌缝合术": "34.8200X002",
+    "胆总管切除术": "51.6303",
+}
+DRG_CODE_OVERRIDES = {
+    ("GB2", "CC"): "GB29",
+    ("EC2", "CC"): "EC29",
+    ("HC1", "无CC/MCC"): "HC15",
+}
 
 
 def get_current_local_llm_mode() -> str:
@@ -277,10 +353,29 @@ def normalize_medical_code(value: str) -> str:
     return value.strip().upper()
 
 
+def resolve_diagnosis_code(name: str, code: str | None = None) -> str:
+    normalized_code = normalize_medical_code(code or "")
+    if normalized_code:
+        return normalized_code
+    return DIAGNOSIS_NAME_CODE_MAP.get(name.strip(), "")
+
+
+def resolve_procedure_code(name: str, code: str | None = None) -> str:
+    normalized_code = normalize_medical_code(code or "")
+    if normalized_code:
+        return normalized_code
+    return PROCEDURE_NAME_CODE_MAP.get(name.strip(), "")
+
+
 def parse_code_list(raw_text: str) -> list[str]:
     if not raw_text:
         return []
-    return [normalize_medical_code(item) for item in re.split(r"[\s,，、;；\n]+", raw_text) if item.strip()]
+    codes = []
+    for item in re.split(r"[\s,，、;；\n]+", raw_text):
+        value = item.strip()
+        if value:
+            codes.append(normalize_medical_code(DIAGNOSIS_NAME_CODE_MAP.get(value, value)))
+    return codes
 
 
 def tokenize_medical_code(value: str) -> list[str]:
@@ -291,6 +386,14 @@ def tokenize_medical_code(value: str) -> list[str]:
 
 def match_mdc(primary_diagnosis_code: str) -> dict[str, str]:
     tokens = tokenize_medical_code(primary_diagnosis_code)
+    for token in tokens:
+        special_rule = SPECIAL_MDC_BY_PRIMARY_CODE.get(token)
+        if special_rule is not None:
+            return {
+                "mdc_code": special_rule["mdc_code"],
+                "mdc_name": special_rule["mdc_name"],
+                "matched_code": token,
+            }
     for rule in SIMPLIFIED_MDC_RULES:
         for prefix in rule["diagnosis_prefixes"]:
             matched_token = next((token for token in tokens if token.startswith(prefix)), None)
@@ -340,7 +443,7 @@ def detect_complication_level(primary_diagnosis_code: str, secondary_codes: list
                 "matched_code": normalized_code,
                 "reason": f"次诊断 {normalized_code} 命中教学版 MCC 列表。",
             }
-        if cc_result is None and any(normalized_code.startswith(prefix) for prefix in SIMPLIFIED_CC_CODES):
+        if cc_result is None and (normalized_code in SIMPLIFIED_CC_EXACT_CODES or any(normalized_code.startswith(prefix) for prefix in SIMPLIFIED_CC_CODES)):
             cc_result = {
                 "level": "CC",
                 "matched_code": normalized_code,
@@ -361,6 +464,14 @@ def build_drg_name(adrg_name: str, complication_level: str) -> str:
     return f"{base_name}{suffix}"
 
 
+def build_drg_code(adrg_code: str, complication_level: str) -> str:
+    override = DRG_CODE_OVERRIDES.get((adrg_code, complication_level))
+    if override:
+        return override
+    suffix = {"MCC": "1", "CC": "3", "无CC/MCC": "5"}.get(complication_level, "9")
+    return f"{adrg_code}{suffix}"
+
+
 def group_drg_case(
     primary_diagnosis_code: str,
     primary_diagnosis_name: str,
@@ -372,8 +483,7 @@ def group_drg_case(
     mdc_result = match_mdc(primary_diagnosis_code)
     adrg_result = match_adrg(mdc_result["mdc_code"], procedure_code)
     complication_result = detect_complication_level(primary_diagnosis_code, secondary_codes)
-    suffix = {"MCC": "1", "CC": "3", "无CC/MCC": "5"}.get(complication_result["level"], "9")
-    drg_code = f"{adrg_result['adrg_code']}{suffix}"
+    drg_code = build_drg_code(adrg_result["adrg_code"], complication_result["level"])
     drg_name = build_drg_name(adrg_result["adrg_name"], complication_result["level"])
     status = "已完成" if mdc_result["mdc_code"] != "MDCQ" and adrg_result["adrg_code"] != "QZ1" else "需复核"
     risk_level = "高" if complication_result["level"] == "MCC" or status == "需复核" else "中" if complication_result["level"] == "CC" else "低"
@@ -1408,11 +1518,13 @@ def cases_page():
     if request.method == "POST":
         patient_name = request.form.get("patient_name", "").strip()
         record_text = request.form.get("record_text", "").strip()
-        primary_diagnosis_code = normalize_medical_code(request.form.get("primary_diagnosis_code", ""))
+        primary_diagnosis_code_raw = request.form.get("primary_diagnosis_code", "")
         primary_diagnosis_name = request.form.get("primary_diagnosis_name", "").strip()
         secondary_diagnosis_raw = request.form.get("secondary_diagnosis_codes", "").strip()
-        procedure_code = normalize_medical_code(request.form.get("procedure_code", ""))
+        procedure_code_raw = request.form.get("procedure_code", "")
         procedure_name = request.form.get("procedure_name", "").strip()
+        primary_diagnosis_code = resolve_diagnosis_code(primary_diagnosis_name, primary_diagnosis_code_raw)
+        procedure_code = resolve_procedure_code(procedure_name, procedure_code_raw)
         form_data = {
             "patient_name": patient_name,
             "record_text": record_text,
@@ -1426,13 +1538,13 @@ def cases_page():
         if validation_error is None:
             validation_error = validate_required_text("电子病历摘要", record_text, MAX_RECORD_TEXT_LENGTH)
         if validation_error is None:
-            validation_error = validate_required_text("主诊断编码", primary_diagnosis_code, MAX_MEDICAL_CODE_LENGTH)
-        if validation_error is None:
             validation_error = validate_required_text("主诊断名称", primary_diagnosis_name, MAX_MEDICAL_NAME_LENGTH)
         if validation_error is None:
-            validation_error = validate_required_text("主手术编码", procedure_code, MAX_MEDICAL_CODE_LENGTH)
-        if validation_error is None:
             validation_error = validate_required_text("主手术名称", procedure_name, MAX_MEDICAL_NAME_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("主诊断编码", primary_diagnosis_code, MAX_MEDICAL_CODE_LENGTH)
+        if validation_error is None:
+            validation_error = validate_required_text("主手术编码", procedure_code, MAX_MEDICAL_CODE_LENGTH)
         if validation_error is not None:
             flash(validation_error, "warning")
         else:

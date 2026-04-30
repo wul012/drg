@@ -102,10 +102,12 @@ instance/drg_platform.db
 ```bash
 python tests/test_local_llm.py
 python tests/test_drg_rules.py
+python tests/test_case_helpers.py
+python tests/test_drg_json_examples.py
 python smoke_test.py
 ```
 
-脚本会自动验证：首页访问、登录、需求分析模式切换、DRG 入组、本地微型LLM 文案生成、提交中心和移动端上报。
+脚本会自动验证：首页访问、登录、需求分析模式切换、DRG 入组、JSON 样例分组、无编码样例自动补码、病例筛选分页、本地微型LLM 文案生成、提交中心和移动端上报。
 
 ## 兼容说明
 
