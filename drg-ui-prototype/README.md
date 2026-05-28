@@ -69,6 +69,16 @@ pip install -r requirements.txt
 python run_server.py
 ```
 
+## 页面操作指南
+
+第一次打开系统不知道怎么操作时，请先看：
+
+```text
+docs/页面操作指南.md
+```
+
+这份指南按页面说明了登录、需求分析、DRG 入组、文档下载、测试用例、提交中心和移动端上报的具体点击路径与示例数据。
+
 ## 数据库位置
 
 项目运行后会自动生成 SQLite 数据库：
@@ -95,6 +105,7 @@ instance/drg_platform.db
 - `requirements.txt`：Python 依赖
 - `smoke_test.py`：基础回归测试脚本
 - `tests/test_local_llm.py`：本地微型LLM专项测试
+- `docs/页面操作指南.md`：面向首次使用者的页面点击与演示说明
 - `templates/`：Jinja2 模板
 - `static/css/style.css`：完整项目样式
 - `static/js/app.js`：前端交互脚本
