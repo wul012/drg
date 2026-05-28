@@ -1,6 +1,9 @@
 .idea/
 __pycache__/
 .playwright-mcp/
+venv/
+.venv/
+instance/
 instance/*.db
 *.sqlite
 *.pyc

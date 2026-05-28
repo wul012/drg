@@ -31,7 +31,24 @@
 
 当前项目依赖 `Flask`。
 
-先在项目目录执行：
+如果是从 GitHub 克隆项目，建议按下面步骤配置：
+
+```bash
+git clone https://github.com/wul012/drg.git
+cd drg/drg-ui-prototype
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python run_server.py
+```
+
+macOS / Linux 激活虚拟环境时使用：
+
+```bash
+source venv/bin/activate
+```
+
+如果已经在项目目录中，只需要先安装依赖：
 
 ```bash
 pip install -r requirements.txt
@@ -71,6 +88,7 @@ instance/drg_platform.db
 ## 项目结构
 
 - `app.py`：Flask 主应用，包含路由、数据库初始化和业务逻辑
+- `drg_case_utils.py`：病例筛选、分页、排序和分布统计辅助函数
 - `local_llm.py`：本地微型LLM模块，负责原因说明、分析、文档和测试文案生成
 - `local_llm_corpus.json`：本地微型LLM扩展语料文件
 - `run_server.py`：本地启动脚本
@@ -113,4 +131,5 @@ python smoke_test.py
 
 - 根目录旧的 `index.html` 已改为跳转说明页，用于避免误打开旧原型入口。
 - `pages/`、`css/`、`js/` 等旧原型目录仅保留作历史兼容，不参与 Flask 正式运行。
-- 正式项目只依赖：`app.py`、`run_server.py`、`templates/`、`static/`、`instance/`。
+- 正式项目只依赖：`app.py`、`drg_case_utils.py`、`local_llm.py`、`local_llm_corpus.json`、`run_server.py`、`templates/`、`static/`。
+- `instance/` 会在首次运行时自动创建，数据库、虚拟文档和提交清单也会自动生成。
