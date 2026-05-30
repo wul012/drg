@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import drg_case_utils as case_utils
 from common import get_current_generation_mode, normalize_choice, now_str, validate_password, validate_required_text, validate_username
 from data_services import *
-from drg_rules import build_case_record, get_chs_mdc_catalog, resolve_diagnosis_code, resolve_procedure_code
+from drg_rules import build_case_record, generate_random_groupable_case_input, get_chs_mdc_catalog, resolve_diagnosis_code, resolve_procedure_code
 from platform_config import *
 from requirement_analysis_generation import RequirementAnalysisGenerator
 from storage import sanitize_filename
@@ -22,6 +22,40 @@ app = Flask(__name__, instance_path=str(INSTANCE_DIR), instance_relative_config=
 app.config["SECRET_KEY"] = os.environ.get("DRG_APP_SECRET", "drg-ui-prototype-secret")
 app.config["DATABASE"] = str(DATABASE_PATH)
 app.teardown_appcontext(close_db)
+
+PENDING_DOCUMENTS: dict[int, list[dict[str, str]]] = {}
+
+
+def store_pending_documents(project_id: int, documents: list[dict[str, str]]) -> None:
+    PENDING_DOCUMENTS[project_id] = [
+        {
+            **document,
+            "id": 0,
+            "doc_key": f"pending-{index}",
+            "saved": False,
+            "content_lines": document["content"].splitlines(),
+        }
+        for index, document in enumerate(documents)
+    ]
+
+
+def add_pending_document(project_id: int, document: dict[str, str]) -> dict[str, Any]:
+    pending_documents = PENDING_DOCUMENTS.setdefault(project_id, [])
+    document_key = f"pending-{len(pending_documents)}-{now_str().replace(':', '').replace(' ', '-')}"
+    pending_document = {
+        **document,
+        "id": 0,
+        "doc_key": document_key,
+        "saved": False,
+        "storage_path": "",
+        "content_lines": document["content"].splitlines(),
+    }
+    pending_documents.append(pending_document)
+    return pending_document
+
+
+def get_all_documents(project_id: int) -> list[dict[str, Any]]:
+    return [*PENDING_DOCUMENTS.get(project_id, []), *get_documents(project_id)]
 
 
 def login_required(view):
@@ -272,12 +306,11 @@ def analysis():
                 """,
                 (project_name, g.user["username"], priority, "文档生成中", target, description, now_str(), project["id"]),
             )
-            sync_generated_content(
-                project["id"],
-                project_name,
-                document_contents=generation_result.document_contents,
-                test_cases=generation_result.test_cases,
-            )
+            drg_cases = get_drg_cases(project["id"])
+            pending_documents = build_documents_payload(project_name, drg_cases, generation_result.document_contents)
+            store_pending_documents(project["id"], pending_documents)
+            replace_agents(project["id"], build_agents_payload(project_name, drg_cases, False))
+            replace_messages(project["id"], build_messages_payload(project_name, drg_cases))
             database.commit()
             flash("需求分析已通过DeepSeek生成并同步完成。", "success")
             if request.headers.get("X-Requested-With") == "fetch":
@@ -286,7 +319,6 @@ def analysis():
                         "ok": True,
                         "message": "需求分析已通过DeepSeek生成并同步完成。",
                         "document_contents": generation_result.document_contents,
-                        "test_cases": generation_result.test_cases,
                     }
                 )
             return redirect(url_for("analysis"))
@@ -402,12 +434,34 @@ def agents_page():
 @login_required
 def documents_page():
     project = get_project()
-    documents = get_documents(project["id"])
+    documents = get_all_documents(project["id"])
+    document_key = request.args.get("document_key", "").strip()
     document_id = request.args.get("document_id", type=int)
-    selected = next((item for item in documents if item["id"] == document_id), documents[0] if documents else None)
+    selected = next((item for item in documents if item["doc_key"] == document_key), None)
+    if selected is None and document_id is not None:
+        selected = next((item for item in documents if item["saved"] and item["id"] == document_id), None)
+    if selected is None:
+        selected = documents[0] if documents else None
     if selected is not None:
         selected = {**selected, "content_lines": selected["content"].splitlines()}
     return render_template("documents.html", page_key="documents", project=project, documents=documents, selected_document=selected)
+
+
+@app.route("/documents/<document_key>/save", methods=["POST"])
+@login_required
+def save_document(document_key: str):
+    project = get_project()
+    pending_documents = PENDING_DOCUMENTS.get(project["id"], [])
+    selected = next((item for item in pending_documents if item["doc_key"] == document_key), None)
+    if selected is None:
+        flash("未找到待保存文档。", "warning")
+        return redirect(url_for("documents_page"))
+    database = get_db()
+    saved_id = save_document_payload(project["id"], project["name"], selected)
+    PENDING_DOCUMENTS[project["id"]] = [item for item in pending_documents if item["doc_key"] != document_key]
+    database.commit()
+    flash("文档已保存至本地。", "success")
+    return redirect(url_for("documents_page", document_id=saved_id))
 
 
 @app.route("/documents/<int:document_id>/download")
@@ -434,6 +488,46 @@ def tests_page():
         flash("测试用例已重新生成。", "success")
         return redirect(url_for("tests_page"))
     return render_template("tests.html", page_key="tests", project=project, test_cases=get_test_cases(project["id"]))
+
+
+@app.route("/tests/random-case")
+@login_required
+def random_test_case():
+    try:
+        case_input = generate_random_groupable_case_input()
+    except ValueError as error:
+        return jsonify({"ok": False, "message": str(error)}), 500
+    return jsonify({"ok": True, "case_json": json.dumps(case_input, ensure_ascii=False, indent=2)})
+
+
+@app.route("/tests/random-case/submit", methods=["POST"])
+@login_required
+def submit_random_test_case():
+    project = get_project()
+    case_json = request.form.get("case_json", "").strip()
+    if not case_json:
+        payload = request.get_json(silent=True) or {}
+        case_json = str(payload.get("case_json", "")).strip()
+    if not case_json:
+        return jsonify({"ok": False, "message": "测试用例JSON不能为空。"}), 400
+    try:
+        json.loads(case_json)
+    except json.JSONDecodeError as error:
+        return jsonify({"ok": False, "message": f"测试用例JSON格式不正确：{error.msg}"}), 400
+    pending_document = add_pending_document(
+        project["id"],
+        {
+            "title": "随机测试用例输入JSON",
+            "status": "未保存",
+            "version": "V1.0",
+            "updated_at": now_str(),
+            "source_agent": "测试用例 Agent",
+            "content": case_json,
+            "received_at": now_str(),
+            "storage_path": "",
+        },
+    )
+    return jsonify({"ok": True, "redirect_url": url_for("documents_page", document_key=pending_document["doc_key"])})
 
 
 @app.route("/submit", methods=["GET", "POST"])

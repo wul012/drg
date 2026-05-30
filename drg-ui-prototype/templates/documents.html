@@ -6,10 +6,10 @@
 <header class="topbar">
     <div>
         <h1>文档自动生成中心</h1>
-        <p>文档会按模板化结构自动生成，写入数据库，并同步落到虚拟文档系统目录。</p>
+        <p>文档中心展示需求分析阶段生成的待保存文档，以及已经保存到本地的文档。</p>
     </div>
     <div class="topbar-actions">
-        <span class="badge">模板生成 · {{ template_runtime['label'] }}</span>
+        <span class="badge">文档中心</span>
         <a class="button-secondary" href="{{ url_for('tests_page') }}">进入测试中心</a>
     </div>
 </header>
@@ -21,10 +21,10 @@
         </div>
         <div class="list-stack">
             {% for item in documents %}
-                <a class="item-card linked-card {% if selected_document and selected_document['id'] == item['id'] %}active-linked-card{% endif %}" href="{{ url_for('documents_page', document_id=item['id']) }}">
+                <a class="item-card linked-card {% if selected_document and selected_document['doc_key'] == item['doc_key'] %}active-linked-card{% endif %}" href="{{ url_for('documents_page', document_key=item['doc_key']) }}">
                     <div class="item-card-top wrap-top">
                         <strong>{{ item['title'] }}</strong>
-                        <span class="status-tag {% if item['status'] == '已生成' or item['status'] == '已提交' %}success{% elif item['status'] == '待更新' %}warning{% endif %}">{{ item['status'] }}</span>
+                        <span class="status-tag {% if item['saved'] %}success{% else %}warning{% endif %}">{{ '已保存' if item['saved'] else '未保存' }}</span>
                     </div>
                     <p>{{ item['version'] }} · {{ item['updated_at'] }}</p>
                     <p>来源：{{ item['source_agent'] }} · 接收时间：{{ item['received_at'] }}</p>
@@ -44,19 +44,20 @@
                     {% if selected_document['storage_path'] %}
                         <a class="button-secondary" href="{{ url_for('download_document', document_id=selected_document['id']) }}">下载原文件</a>
                     {% endif %}
-                    <a class="button-secondary" href="{{ url_for('submit_page') }}">进入提交中心</a>
+                    {% if not selected_document['saved'] %}
+                        <form method="post" action="{{ url_for('save_document', document_key=selected_document['doc_key']) }}">
+                            <button class="button-secondary" type="submit">保存文档</button>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
             <div class="info-list compact-info-list">
                 <div class="info-row"><strong>来源智能体</strong><span>{{ selected_document['source_agent'] }}</span></div>
                 <div class="info-row"><strong>接收时间</strong><span>{{ selected_document['received_at'] }}</span></div>
-                <div class="info-row"><strong>生成模式</strong><span>{{ template_runtime['label'] }}</span></div>
-                <div class="info-row"><strong>本地存储</strong><span>{{ selected_document['storage_path'] }}</span></div>
+                <div class="info-row"><strong>本地存储</strong><span>{{ selected_document['storage_path'] or '尚未保存至本地' }}</span></div>
             </div>
-            <div class="document-lines">
-                {% for line in selected_document['content_lines'] %}
-                    <div class="document-line">{{ line }}</div>
-                {% endfor %}
+            <div class="document-content-card">
+                <pre class="document-content-text">{{ selected_document['content'] }}</pre>
             </div>
         {% else %}
             <div class="empty-state">暂无文档数据。</div>

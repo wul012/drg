@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import random
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -343,6 +344,68 @@ def group_drg_case(
         "status": status,
         "group_reason": group_reason,
     }
+
+
+def generate_random_groupable_case_input() -> dict[str, Any]:
+    rules = load_chs_rules()
+    diagnosis_rows = list(rules.get("mdc_diagnoses", {}).values())
+    procedure_rows = [
+        rule
+        for rules_for_code in rules.get("adrg_procedures", {}).values()
+        for rule in rules_for_code
+    ]
+    if not diagnosis_rows or not procedure_rows:
+        raise ValueError("CHS-DRG规则文件不完整，无法随机生成可入组用例。")
+
+    complication_sources = [
+        ("MCC", list(rules.get("mcc_groups", {}).items())),
+        ("CC", list(rules.get("cc_groups", {}).items())),
+        (NO_CC_MCC_LEVEL, []),
+    ]
+    random.shuffle(complication_sources)
+
+    for _ in range(300):
+        diagnosis = random.choice(diagnosis_rows)
+        expected_prefix = diagnosis["mdc_code"].replace("MDC", "")[:1]
+        matched_procedures = [item for item in procedure_rows if item["adrg_code"].startswith(expected_prefix)]
+        if not matched_procedures:
+            continue
+        procedure = random.choice(matched_procedures)
+        secondary_items: list[dict[str, str]] = []
+
+        for _, candidates in complication_sources:
+            secondary_items = []
+            if candidates:
+                random.shuffle(candidates)
+                for secondary_code, secondary_name in candidates[:80]:
+                    if not is_chs_complication_excluded(diagnosis["matched_code"], secondary_code, rules.get("cce_groups", {})):
+                        secondary_items = [{"疾病名称": secondary_name, "疾病编码": secondary_code}]
+                        break
+            grouped = group_drg_case(
+                diagnosis["matched_code"],
+                diagnosis.get("diagnosis_name", ""),
+                procedure["procedure_code"],
+                procedure["procedure_name"],
+                [item["疾病编码"] for item in secondary_items],
+                "",
+            )
+            if grouped["status"] == "已完成":
+                return {
+                    "性别": random.choice(["男", "女"]),
+                    "年龄": random.randint(18, 88),
+                    "主要诊断": {
+                        "疾病名称": diagnosis.get("diagnosis_name", ""),
+                        "疾病编码": diagnosis["matched_code"],
+                    },
+                    "次要诊断列表": secondary_items,
+                    "主要手术": {
+                        "手术名称": procedure["procedure_name"],
+                        "手术编码": procedure["procedure_code"],
+                    },
+                    "其他手术列表": [],
+                }
+
+    raise ValueError("未能在当前规则集中随机生成可正常入组的输入用例。")
 
 
 def build_case_record(

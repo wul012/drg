@@ -242,33 +242,59 @@ def build_documents_payload(
     payload = [
         {
             "title": "需求分析文档",
-            "status": "已生成",
+            "status": "未保存",
             "version": "V2.0",
             "updated_at": timestamp,
             "source_agent": "需求分析 Agent",
             "content": generated_contents["需求分析文档"],
+            "storage_path": "",
         },
         {
             "title": "架构设计文档",
-            "status": "已生成",
+            "status": "未保存",
             "version": "V2.0",
             "updated_at": timestamp,
             "source_agent": "文档生成 Agent",
             "content": generated_contents["架构设计文档"],
+            "storage_path": "",
         },
         {
             "title": "测试文档",
-            "status": "已生成",
+            "status": "未保存",
             "version": "V2.0",
             "updated_at": timestamp,
             "source_agent": "测试用例 Agent",
             "content": generated_contents["测试文档"],
+            "storage_path": "",
         },
     ]
     for item in payload:
         item["received_at"] = item["updated_at"]
-        item["storage_path"] = write_virtual_document(project_name, item["title"], item["version"], item["content"], item["received_at"])
     return payload
+
+
+def save_document_payload(project_id: int, project_name: str, document: dict[str, str]) -> int:
+    saved_at = now_str()
+    storage_path = write_virtual_document(project_name, document["title"], document["version"], document["content"], saved_at)
+    database = get_db()
+    cursor = database.execute(
+        """
+        INSERT INTO documents (project_id, title, status, version, content, updated_at, source_agent, storage_path, received_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            project_id,
+            document["title"],
+            "已保存",
+            document["version"],
+            document["content"],
+            saved_at,
+            document["source_agent"],
+            storage_path,
+            document.get("received_at") or saved_at,
+        ),
+    )
+    return int(cursor.lastrowid)
 
 
 def build_test_cases_payload(project_name: str, drg_cases: list[Any], test_cases: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
@@ -431,26 +457,6 @@ def seed_demo_data() -> None:
             message_rows,
         )
 
-        generated_documents = build_documents_payload(project_name, drg_cases)
-        document_rows = [
-            (
-                project_id,
-                item["title"],
-                item["status"],
-                item["version"],
-                item["content"],
-                item["updated_at"],
-                item["source_agent"],
-                item["storage_path"],
-                item["received_at"],
-            )
-            for item in generated_documents
-        ]
-        cursor.executemany(
-            "INSERT INTO documents (project_id, title, status, version, content, updated_at, source_agent, storage_path, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            document_rows,
-        )
-
         generated_test_cases = build_test_cases_payload(project_name, drg_cases)
         test_rows = [
             (
@@ -472,13 +478,6 @@ def seed_demo_data() -> None:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             test_rows,
-        )
-
-        submission_batch_name = "实验二初始提交批次"
-        submission_artifact_path = write_submission_artifact(submission_batch_name, "王医生", generated_documents[:2], created_at)
-        cursor.execute(
-            "INSERT INTO submissions (project_id, batch_name, status, docs_count, operator_name, submitted_at, artifact_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (project_id, submission_batch_name, "待审核", 2, "王医生", created_at, submission_artifact_path),
         )
         cursor.execute(
             "INSERT INTO mobile_reports (project_id, title, content, priority, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -540,7 +539,7 @@ def get_documents(project_id: int) -> list[dict[str, Any]]:
         {
             "id": row["id"],
             "title": row["title"],
-            "status": row["status"],
+            "status": "已保存",
             "version": row["version"],
             "content": row["content"],
             "content_lines": row["content"].split("\n"),
@@ -548,6 +547,8 @@ def get_documents(project_id: int) -> list[dict[str, Any]]:
             "source_agent": row["source_agent"],
             "storage_path": row["storage_path"],
             "received_at": row["received_at"],
+            "saved": True,
+            "doc_key": f"saved-{row['id']}",
         }
         for row in rows
     ]
@@ -695,9 +696,9 @@ def sync_generated_content(
     document_contents: dict[str, str] | None = None,
     test_cases: list[dict[str, str]] | None = None,
 ) -> None:
+    del document_contents
     drg_cases = get_drg_cases(project_id)
     submissions = get_submissions(project_id)
     replace_agents(project_id, build_agents_payload(project_name, drg_cases, bool(submissions)))
     replace_messages(project_id, build_messages_payload(project_name, drg_cases))
-    replace_documents(project_id, build_documents_payload(project_name, drg_cases, document_contents))
     replace_test_cases(project_id, build_test_cases_payload(project_name, drg_cases, test_cases))

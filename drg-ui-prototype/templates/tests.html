@@ -10,9 +10,7 @@
     </div>
     <div class="topbar-actions">
         <span class="badge">模板生成 · {{ template_runtime['label'] }}</span>
-        <form method="post">
-            <button class="button-secondary" type="submit">重新生成用例</button>
-        </form>
+        <button class="button-secondary" id="random_case_button" type="button">随机生成用例</button>
         <a class="button" href="{{ url_for('submit_page') }}">进入提交中心</a>
     </div>
 </header>
@@ -49,4 +47,21 @@
         </table>
     </div>
 </section>
+
+<div class="modal-backdrop" id="random_case_modal" hidden>
+    <div class="modal-panel">
+        <div class="panel-header">
+            <div>
+                <h3>随机输入用例</h3>
+                <p>仅包含可正常入组的输入 JSON，不包含输出入组结果。</p>
+            </div>
+            <button class="button-secondary" id="random_case_close" type="button">关闭</button>
+        </div>
+        <pre class="random-case-json" id="random_case_json"></pre>
+        <div class="form-actions modal-actions">
+            <button class="button-secondary" id="random_case_refresh" type="button">再生成一次</button>
+            <button class="button" id="random_case_submit" type="button">提交至文档中心</button>
+        </div>
+    </div>
+</div>
 {% endblock %}

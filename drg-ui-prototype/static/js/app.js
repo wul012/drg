@@ -67,25 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return card;
         };
 
-        const renderTestCasesCard = (testCases) => {
-            const card = createCard('测试用例');
-            const list = document.createElement('div');
-            list.className = 'analysis-test-case-list';
-            (Array.isArray(testCases) ? testCases : []).forEach((item) => {
-                const block = document.createElement('div');
-                block.className = 'analysis-test-case';
-                const title = document.createElement('strong');
-                title.textContent = `${item.case_code || ''} ${item.feature || ''}`.trim();
-                const detail = document.createElement('p');
-                detail.textContent = `前置：${item.precondition_text || ''}\n步骤：${item.steps_text || ''}\n预期：${item.expected_text || ''}`;
-                block.appendChild(title);
-                block.appendChild(detail);
-                list.appendChild(block);
-            });
-            card.appendChild(list);
-            return card;
-        };
-
         const setResultMessage = (message, isError = false) => {
             analysisResult.innerHTML = '';
             const card = createCard(isError ? '生成失败' : '生成中');
@@ -102,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
             analysisResult.appendChild(renderTextCard('需求分析文档', documentContents['需求分析文档']));
             analysisResult.appendChild(renderTextCard('架构设计文档', documentContents['架构设计文档']));
             analysisResult.appendChild(renderTextCard('测试文档', documentContents['测试文档']));
-            analysisResult.appendChild(renderTestCasesCard(payload.test_cases));
         };
 
         analysisForm.addEventListener('submit', async (event) => {
@@ -137,5 +117,92 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+    }
+
+    const randomCaseButton = document.querySelector('#random_case_button');
+    const randomCaseModal = document.querySelector('#random_case_modal');
+    const randomCaseJson = document.querySelector('#random_case_json');
+    const randomCaseClose = document.querySelector('#random_case_close');
+    const randomCaseRefresh = document.querySelector('#random_case_refresh');
+    const randomCaseSubmit = document.querySelector('#random_case_submit');
+    if (randomCaseButton && randomCaseModal && randomCaseJson) {
+        const setRandomCaseLoading = (message) => {
+            randomCaseJson.textContent = message;
+        };
+
+        const openRandomCaseModal = () => {
+            randomCaseModal.hidden = false;
+        };
+
+        const closeRandomCaseModal = () => {
+            randomCaseModal.hidden = true;
+        };
+
+        const fetchRandomCase = async () => {
+            setRandomCaseLoading('正在随机生成可正常入组的输入 JSON...');
+            openRandomCaseModal();
+            const response = await fetch('/tests/random-case', {
+                headers: {
+                    'X-Requested-With': 'fetch',
+                },
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || '随机生成失败。');
+            }
+            randomCaseJson.textContent = payload.case_json || '';
+        };
+
+        randomCaseButton.addEventListener('click', async () => {
+            try {
+                await fetchRandomCase();
+            } catch (error) {
+                openRandomCaseModal();
+                randomCaseJson.textContent = error.message || '随机生成失败。';
+            }
+        });
+
+        if (randomCaseClose) {
+            randomCaseClose.addEventListener('click', closeRandomCaseModal);
+        }
+
+        if (randomCaseRefresh) {
+            randomCaseRefresh.addEventListener('click', async () => {
+                try {
+                    await fetchRandomCase();
+                } catch (error) {
+                    randomCaseJson.textContent = error.message || '随机生成失败。';
+                }
+            });
+        }
+
+        if (randomCaseSubmit) {
+            randomCaseSubmit.addEventListener('click', async () => {
+                const caseJson = randomCaseJson.textContent.trim();
+                if (!caseJson || caseJson.startsWith('正在')) {
+                    return;
+                }
+                randomCaseSubmit.disabled = true;
+                try {
+                    const response = await fetch('/tests/random-case/submit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'fetch',
+                        },
+                        body: JSON.stringify({ case_json: caseJson }),
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || '提交失败。');
+                    }
+                    window.location.href = payload.redirect_url;
+                } catch (error) {
+                    randomCaseJson.textContent = error.message || '提交失败。';
+                } finally {
+                    randomCaseSubmit.disabled = false;
+                }
+            });
+        }
     }
 });

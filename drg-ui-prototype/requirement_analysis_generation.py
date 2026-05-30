@@ -15,7 +15,6 @@ DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
 @dataclass(frozen=True)
 class RequirementAnalysisResult:
     document_contents: dict[str, str]
-    test_cases: list[dict[str, str]]
 
 
 class RequirementAnalysisGenerator:
@@ -46,7 +45,6 @@ class RequirementAnalysisGenerator:
         normalized = self._normalize_model_payload(parsed)
         return RequirementAnalysisResult(
             document_contents=normalized["document_contents"],
-            test_cases=normalized["test_cases"],
         )
 
     def _load_config(self) -> None:
@@ -77,18 +75,7 @@ class RequirementAnalysisGenerator:
     "需求分析文档": "含系统功能需求、非功能需求、角色、核心用例、业务流程、验收标准",
     "架构设计文档": "含整体结构、模块关系、数据流、接口协作、部署与扩展说明",
     "测试文档": "含测试策略、测试范围、测试方案、关键测试用例与验收口径"
-  }},
-  "test_cases": [
-    {{
-      "case_code": "REQ-CASE-001",
-      "feature": "被测功能",
-      "precondition_text": "前置条件",
-      "steps_text": "测试步骤",
-      "expected_text": "预期结果",
-      "priority": "高",
-      "case_category": "正常"
-    }}
-  ]
+  }}
 }}
 
 生成要求：
@@ -96,7 +83,7 @@ class RequirementAnalysisGenerator:
 2. 需求分析文档必须包含系统功能需求和用例。
 3. 架构设计文档必须包含整体结构和模块关系。
 4. 测试文档必须包含测试策略和测试方案。
-5. 测试用例3条即可，覆盖正常、边界、异常和集成流程。
+5. 测试文档可以描述测试范围与方案，但不要输出独立的test_cases数组。
 6. 不要编造外部法规版本号；若信息不足，请写明假设和待确认项。
 
 项目名称：{project_name}
@@ -141,12 +128,9 @@ class RequirementAnalysisGenerator:
 
     def _normalize_model_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         document_contents = payload.get("document_contents")
-        test_cases = payload.get("test_cases")
 
         if not isinstance(document_contents, dict):
             raise ValueError("DeepSeek返回结果缺少document_contents对象。")
-        if not isinstance(test_cases, list):
-            raise ValueError("DeepSeek返回结果缺少test_cases数组。")
 
         normalized_documents = {
             "需求分析文档": str(document_contents.get("需求分析文档") or "").strip(),
@@ -155,25 +139,6 @@ class RequirementAnalysisGenerator:
         }
         if not all(normalized_documents.values()):
             raise ValueError("DeepSeek返回结果缺少必需文档内容。")
-        normalized_cases = [
-            self._normalize_test_case(item, index)
-            for index, item in enumerate(test_cases, start=1)
-            if isinstance(item, dict)
-        ]
-        if not normalized_cases:
-            raise ValueError("DeepSeek返回结果没有可用测试用例。")
         return {
             "document_contents": normalized_documents,
-            "test_cases": normalized_cases,
-        }
-
-    def _normalize_test_case(self, item: dict[str, Any], index: int) -> dict[str, str]:
-        return {
-            "case_code": str(item.get("case_code") or f"REQ-CASE-{index:03d}"),
-            "feature": str(item.get("feature") or "需求文档生成能力"),
-            "precondition_text": str(item.get("precondition_text") or "已录入系统需求、系统代码或设计信息。"),
-            "steps_text": str(item.get("steps_text") or "提交需求分析生成请求，查看生成结果。"),
-            "expected_text": str(item.get("expected_text") or "系统生成需求分析、架构设计和测试文档。"),
-            "priority": str(item.get("priority") or "中"),
-            "case_category": str(item.get("case_category") or "正常"),
         }
