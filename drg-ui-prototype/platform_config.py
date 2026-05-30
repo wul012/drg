@@ -1,0 +1,26 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+INSTANCE_DIR = BASE_DIR / "instance"
+DATABASE_PATH = INSTANCE_DIR / "drg_platform.db"
+
+VALID_PRIORITIES = {"高", "中", "低"}
+VALID_DOC_TYPES = {"需求分析文档", "架构设计文档", "测试用例文档", "完整提交包"}
+VALID_ROLES = {"分析员", "医生", "管理员"}
+MAX_PROJECT_NAME_LENGTH = 40
+MAX_DESCRIPTION_LENGTH = 300
+MAX_TARGET_LENGTH = 200
+MAX_REPORT_TITLE_LENGTH = 50
+MAX_REPORT_CONTENT_LENGTH = 500
+MIN_USERNAME_LENGTH = 3
+MAX_USERNAME_LENGTH = 20
+MIN_PASSWORD_LENGTH = 6
+VIRTUAL_DOCS_DIR = INSTANCE_DIR / "virtual_docs"
+SUBMISSION_ARTIFACTS_DIR = INSTANCE_DIR / "submissions"
+MAX_PATIENT_NAME_LENGTH = 30
+MAX_RECORD_TEXT_LENGTH = 800
+MAX_MEDICAL_NAME_LENGTH = 60
+MAX_MEDICAL_CODE_LENGTH = 40

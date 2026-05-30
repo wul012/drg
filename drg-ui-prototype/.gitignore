@@ -13,3 +13,5 @@ instance/*.db
 /identifier.sqlite
 /instance/*.dbv
 /favicon.ico
+
+CHS_DRG_20/
