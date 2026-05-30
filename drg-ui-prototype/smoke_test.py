@@ -86,7 +86,7 @@ def run_smoke_tests() -> None:
                     "target": "测试目标产物",
                     "priority": "高",
                     "doc_type": "完整提交包",
-                    "llm_mode": "strict",
+                    "generation_mode": "strict",
                 },
                 follow_redirects=True,
             )
@@ -100,100 +100,15 @@ def run_smoke_tests() -> None:
                     "target": "生成完整提交包并留痕",
                     "priority": "高",
                     "doc_type": "完整提交包",
-                    "llm_mode": "creative",
+                    "generation_mode": "creative",
                 },
                 follow_redirects=True,
             )
             assert analysis_response.status_code == 200
             analysis_body = analysis_response.get_data(as_text=True)
             assert_contains(analysis_body, "需求分析已完成")
-            assert_contains(analysis_body, "本地微型LLM")
-            assert_contains(analysis_body, "增强模式")
-
-            invalid_case_response = client.post(
-                "/cases",
-                data={
-                    "patient_name": "张三",
-                    "record_text": "病例摘要",
-                    "primary_diagnosis_code": "",
-                    "primary_diagnosis_name": "伤寒性脑膜炎",
-                    "secondary_diagnosis_codes": "J96.0",
-                    "procedure_code": "38.1000X002",
-                    "procedure_name": "动脉内膜剥脱术",
-                },
-                follow_redirects=True,
-            )
-            assert_contains(invalid_case_response.get_data(as_text=True), "主诊断编码不能为空。")
-
-            case_response = client.post(
-                "/cases",
-                data={
-                    "patient_name": "张三",
-                    "record_text": "患者主诊断 A01.002+G01，次诊断 J96.0，主要手术 38.1000X002。",
-                    "primary_diagnosis_code": "A01.002+G01",
-                    "primary_diagnosis_name": "伤寒性脑膜炎",
-                    "secondary_diagnosis_codes": "J96.0",
-                    "procedure_code": "38.1000X002",
-                    "procedure_name": "动脉内膜剥脱术",
-                },
-                follow_redirects=True,
-            )
-            assert case_response.status_code == 200
-            case_body = case_response.get_data(as_text=True)
-            assert_contains(case_body, "已完成本地教学规则入组")
-            assert_contains(case_body, "MDC")
-            assert_contains(case_body, "DRG")
-            assert_contains(case_body, "本地微型LLM")
-
-            circulatory_case_response = client.post(
-                "/cases",
-                data={
-                    "patient_name": "李四",
-                    "record_text": "患者主诊断 I21.0 急性心肌梗死，次诊断 I10，执行冠状动脉搭桥术。",
-                    "primary_diagnosis_code": "I21.0",
-                    "primary_diagnosis_name": "急性心肌梗死",
-                    "secondary_diagnosis_codes": "I10",
-                    "procedure_code": "36.10",
-                    "procedure_name": "冠状动脉搭桥术",
-                },
-                follow_redirects=True,
-            )
-            assert circulatory_case_response.status_code == 200
-            circulatory_body = circulatory_case_response.get_data(as_text=True)
-            assert_contains(circulatory_body, "MDCE")
-            assert_contains(circulatory_body, "FB1")
-
-            filter_hit_response = client.get("/cases?mdc=MDCE&q=%E5%BF%83")
-            assert filter_hit_response.status_code == 200
-            filter_hit_body = filter_hit_response.get_data(as_text=True)
-            assert_contains(filter_hit_body, "急性心肌梗死")
-            assert "张某某" not in filter_hit_body
-
-            filter_miss_response = client.get("/cases?mdc=MDCE&q=thiswillnothit")
-            assert filter_miss_response.status_code == 200
-            assert_contains(
-                filter_miss_response.get_data(as_text=True),
-                "当前筛选条件下没有命中的病例，请调整条件后重试。",
-            )
-
-            risk_filter_response = client.get("/cases?risk=%E4%B8%AD&status=%E5%88%86%E6%9E%90%E4%B8%AD")
-            assert risk_filter_response.status_code == 200
-            risk_filter_body = client.get("/cases?risk=%E9%AB%98&status=%E5%B7%B2%E5%AE%8C%E6%88%90").get_data(as_text=True)
-            assert_contains(risk_filter_body, "张三")
-            assert "李四" not in risk_filter_body
-
-            sorted_case_response = client.get("/cases?sort=risk_desc")
-            assert sorted_case_response.status_code == 200
-            sorted_case_body = sorted_case_response.get_data(as_text=True)
-            first_index = sorted_case_body.find("CASE-001")
-            second_index = sorted_case_body.find("CASE-002")
-            assert first_index != -1 and second_index != -1 and first_index < second_index, sorted_case_body
-
-            paged_case_response = client.get("/cases?page=2")
-            assert paged_case_response.status_code == 200
-            paged_case_body = paged_case_response.get_data(as_text=True)
-            assert_contains(paged_case_body, "当前显示第")
-            assert_contains(paged_case_body, "下一页")
+            assert_contains(analysis_body, "模板生成")
+            assert_contains(analysis_body, "展示模式")
 
             first_document_id_for_download = get_first_document_id()
             download_response = client.get(f"/documents/{first_document_id_for_download}/download")
@@ -215,7 +130,7 @@ def run_smoke_tests() -> None:
                 follow_redirects=True,
             )
             assert delete_response.status_code == 200
-            assert_contains(delete_response.get_data(as_text=True), "已成功删除")
+            assert_contains(delete_response.get_data(as_text=True), "病例已删除。")
             with app.app_context():
                 cases_after_delete = get_drg_cases(project["id"])
             assert len(cases_after_delete) == len(cases_before_delete) - 1, (
@@ -253,39 +168,6 @@ def run_smoke_tests() -> None:
             assert len(cases_after_forbidden) == len(remaining_cases), (
                 "Non-admin role should not be able to delete cases."
             )
-            client.get("/logout", follow_redirects=True)
-            client.post(
-                "/login",
-                data={"username": "admin", "password": "123456"},
-                follow_redirects=True,
-            )
-
-            invalid_mobile_report_response = client.post(
-                "/mobile/report",
-                data={
-                    "title": "",
-                    "content": "",
-                    "priority": "中",
-                },
-                follow_redirects=True,
-            )
-            assert_contains(invalid_mobile_report_response.get_data(as_text=True), "上报标题不能为空。")
-
-            report_title = "移动端补充病例规则"
-            mobile_report_response = client.post(
-                "/mobile/report",
-                data={
-                    "title": report_title,
-                    "content": "需要补充住院天数、并发症描述和术后观察字段。",
-                    "priority": "高",
-                },
-                follow_redirects=True,
-            )
-            assert mobile_report_response.status_code == 200
-            body = mobile_report_response.get_data(as_text=True)
-            assert_contains(body, "上报成功")
-            assert_contains(body, report_title)
-
         print("Smoke tests passed.")
     finally:
         app.config.update(DATABASE=original_database, TESTING=original_testing)

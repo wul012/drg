@@ -6,9 +6,9 @@ from typing import Any
 from flask import current_app, g
 from werkzeug.security import generate_password_hash
 
-from common import dumps, get_current_local_llm_mode, loads, now_str
+from common import get_current_generation_mode, loads, now_str
 from drg_rules import build_case_record
-from local_llm import generate_analysis_payload, generate_document_contents, generate_test_cases
+from template_generation import generate_test_cases
 from platform_config import INSTANCE_DIR, SUBMISSION_ARTIFACTS_DIR, VIRTUAL_DOCS_DIR
 from storage import write_submission_artifact, write_virtual_document
 
@@ -42,6 +42,7 @@ def ensure_column_exists(connection: sqlite3.Connection, table_name: str, column
 
 
 def run_schema_migrations(connection: sqlite3.Connection) -> None:
+    connection.execute("DROP TABLE IF EXISTS analyses")
     ensure_column_exists(connection, "drg_cases", "record_text", "TEXT NOT NULL DEFAULT ''")
     ensure_column_exists(connection, "drg_cases", "primary_diagnosis_code", "TEXT NOT NULL DEFAULT ''")
     ensure_column_exists(connection, "drg_cases", "primary_diagnosis_name", "TEXT NOT NULL DEFAULT ''")
@@ -85,17 +86,6 @@ def init_database() -> None:
             description TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS analyses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id INTEGER NOT NULL UNIQUE,
-            summary_json TEXT NOT NULL,
-            modules_json TEXT NOT NULL,
-            risks_json TEXT NOT NULL,
-            recommendations_json TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            FOREIGN KEY(project_id) REFERENCES projects(id)
         );
 
         CREATE TABLE IF NOT EXISTS drg_cases (
@@ -186,32 +176,27 @@ def init_database() -> None:
     connection.close()
 
 
-def build_analysis_payload(project_name: str, description: str, target: str, priority: str, doc_type: str) -> dict[str, list[str]]:
-    return generate_analysis_payload(project_name, description, target, priority, doc_type, mode=get_current_local_llm_mode())
-
-
 def get_latest_case(drg_cases: list[Any]) -> Any | None:
     return drg_cases[-1] if drg_cases else None
 
 
 def build_agents_payload(
     project_name: str,
-    analysis_payload: dict[str, list[str]],
     drg_cases: list[Any],
     has_submissions: bool,
 ) -> list[dict[str, str]]:
     latest_case = get_latest_case(drg_cases)
     latest_case_label = latest_case["case_code"] if latest_case else "暂无病例"
     return [
-        {"name": "需求分析 Agent", "owner": "产品侧", "status": "已完成", "focus": f"完成 {project_name} 的需求摘要、模块建议与风险识别"},
+        {"name": "需求分析 Agent", "owner": "产品侧", "status": "已完成", "focus": f"完成 {project_name} 的LLM文档生成"},
         {"name": "DRG 分析 Agent", "owner": "业务侧", "status": "已完成" if latest_case else "待处理", "focus": f"最近处理病例：{latest_case_label}"},
-        {"name": "文档生成 Agent", "owner": "交付侧", "status": "已完成", "focus": f"基于 {len(analysis_payload['modules'])} 个核心模块生成文档"},
+        {"name": "文档生成 Agent", "owner": "交付侧", "status": "已完成", "focus": "生成需求分析、架构设计与测试文档"},
         {"name": "测试用例 Agent", "owner": "测试侧", "status": "已完成" if latest_case else "运行中", "focus": "输出正常、边界、异常三类测试用例"},
         {"name": "提交 Agent", "owner": "管理侧", "status": "已完成" if has_submissions else "待处理", "focus": "接收虚拟文档系统文档并生成提交批次"},
     ]
 
 
-def build_messages_payload(project_name: str, analysis_payload: dict[str, list[str]], drg_cases: list[Any]) -> list[dict[str, str]]:
+def build_messages_payload(project_name: str, drg_cases: list[Any]) -> list[dict[str, str]]:
     timestamp = now_str()
     latest_case = get_latest_case(drg_cases)
     latest_case_message = (
@@ -223,7 +208,7 @@ def build_messages_payload(project_name: str, analysis_payload: dict[str, list[s
         {
             "sender": "需求分析 Agent",
             "receiver": "DRG 分析 Agent",
-            "content": f"已解析 {project_name} 的需求上下文，共识别 {len(analysis_payload['modules'])} 个核心模块。",
+            "content": f"已完成 {project_name} 的LLM文档生成请求。",
             "source": "desktop",
             "created_at": timestamp,
         },
@@ -244,10 +229,16 @@ def build_messages_payload(project_name: str, analysis_payload: dict[str, list[s
     ]
 
 
-def build_documents_payload(project_name: str, analysis_payload: dict[str, list[str]], drg_cases: list[Any]) -> list[dict[str, str]]:
+def build_documents_payload(
+    project_name: str,
+    drg_cases: list[Any],
+    document_contents: dict[str, str] | None = None,
+) -> list[dict[str, str]]:
     timestamp = now_str()
-    latest_case = get_latest_case(drg_cases)
-    generated_contents = generate_document_contents(project_name, analysis_payload, latest_case, mode=get_current_local_llm_mode())
+    del drg_cases
+    if document_contents is None:
+        return []
+    generated_contents = document_contents
     payload = [
         {
             "title": "需求分析文档",
@@ -280,9 +271,10 @@ def build_documents_payload(project_name: str, analysis_payload: dict[str, list[
     return payload
 
 
-def build_test_cases_payload(project_name: str, drg_cases: list[Any]) -> list[dict[str, str]]:
+def build_test_cases_payload(project_name: str, drg_cases: list[Any], test_cases: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
     timestamp = now_str()
-    return [{**item, "updated_at": timestamp} for item in generate_test_cases(project_name, drg_cases, mode=get_current_local_llm_mode())]
+    generated_cases = test_cases or generate_test_cases(project_name, drg_cases, mode=get_current_generation_mode())
+    return [{**item, "updated_at": timestamp} for item in generated_cases]
 
 
 def seed_demo_data() -> None:
@@ -324,28 +316,6 @@ def seed_demo_data() -> None:
             ),
         )
         project_id = cursor.lastrowid
-
-        analysis_payload = build_analysis_payload(
-            project_name,
-            "围绕住院病例信息、DRG规则匹配、多Agent协作与文档生成展开。",
-            "输出需求分析、架构设计、测试用例和提交记录。",
-            "高",
-            "完整提交包",
-        )
-        cursor.execute(
-            """
-            INSERT INTO analyses (project_id, summary_json, modules_json, risks_json, recommendations_json, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                project_id,
-                dumps(analysis_payload["summary"]),
-                dumps(analysis_payload["modules"]),
-                dumps(analysis_payload["risks"]),
-                dumps(analysis_payload["recommendations"]),
-                created_at,
-            ),
-        )
 
         drg_cases = [
             build_case_record(
@@ -441,7 +411,7 @@ def seed_demo_data() -> None:
             ],
         )
 
-        generated_agents = build_agents_payload(project_name, analysis_payload, drg_cases, False)
+        generated_agents = build_agents_payload(project_name, drg_cases, False)
         agent_rows = [
             (project_id, item["name"], item["owner"], item["status"], item["focus"], created_at)
             for item in generated_agents
@@ -451,7 +421,7 @@ def seed_demo_data() -> None:
             agent_rows,
         )
 
-        generated_messages = build_messages_payload(project_name, analysis_payload, drg_cases)
+        generated_messages = build_messages_payload(project_name, drg_cases)
         message_rows = [
             (project_id, item["sender"], item["receiver"], item["content"], item["source"], item["created_at"])
             for item in generated_messages
@@ -461,7 +431,7 @@ def seed_demo_data() -> None:
             message_rows,
         )
 
-        generated_documents = build_documents_payload(project_name, analysis_payload, drg_cases)
+        generated_documents = build_documents_payload(project_name, drg_cases)
         document_rows = [
             (
                 project_id,
@@ -515,6 +485,36 @@ def seed_demo_data() -> None:
             (project_id, "新增病例录入需求", "移动端需要支持病例摘要快速上报，并同步到PC端工作台。", "高", "王医生", created_at),
         )
 
+    project_row = cursor.execute("SELECT id, name FROM projects ORDER BY id LIMIT 1").fetchone()
+    if project_row is not None:
+        old_test_case = cursor.execute(
+            "SELECT id FROM test_cases WHERE project_id = ? AND case_code = ?",
+            (project_row["id"], "TC-201"),
+        ).fetchone()
+        if old_test_case is not None:
+            cursor.execute("DELETE FROM test_cases WHERE project_id = ?", (project_row["id"],))
+            generated_test_cases = build_test_cases_payload(project_row["name"], [])
+            cursor.executemany(
+                """
+                INSERT INTO test_cases (project_id, case_code, feature, precondition_text, steps_text, expected_text, priority, case_category, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        project_row["id"],
+                        item["case_code"],
+                        item["feature"],
+                        item["precondition_text"],
+                        item["steps_text"],
+                        item["expected_text"],
+                        item["priority"],
+                        item["case_category"],
+                        item["updated_at"],
+                    )
+                    for item in generated_test_cases
+                ],
+            )
+
     connection.commit()
     connection.close()
 
@@ -532,19 +532,6 @@ def get_project() -> sqlite3.Row:
     if project is None:
         raise RuntimeError("Project seed data not found.")
     return project
-
-
-def get_analysis(project_id: int) -> dict[str, Any]:
-    row = fetch_one("SELECT * FROM analyses WHERE project_id = ?", (project_id,))
-    if row is None:
-        return {"summary": [], "modules": [], "risks": [], "recommendations": [], "updated_at": now_str()}
-    return {
-        "summary": loads(row["summary_json"]),
-        "modules": loads(row["modules_json"]),
-        "risks": loads(row["risks_json"]),
-        "recommendations": loads(row["recommendations_json"]),
-        "updated_at": row["updated_at"],
-    }
 
 
 def get_documents(project_id: int) -> list[dict[str, Any]]:
@@ -702,10 +689,15 @@ def replace_test_cases(project_id: int, payload: list[dict[str, str]]) -> None:
     )
 
 
-def sync_generated_content(project_id: int, project_name: str, analysis_payload: dict[str, list[str]]) -> None:
+def sync_generated_content(
+    project_id: int,
+    project_name: str,
+    document_contents: dict[str, str] | None = None,
+    test_cases: list[dict[str, str]] | None = None,
+) -> None:
     drg_cases = get_drg_cases(project_id)
     submissions = get_submissions(project_id)
-    replace_agents(project_id, build_agents_payload(project_name, analysis_payload, drg_cases, bool(submissions)))
-    replace_messages(project_id, build_messages_payload(project_name, analysis_payload, drg_cases))
-    replace_documents(project_id, build_documents_payload(project_name, analysis_payload, drg_cases))
-    replace_test_cases(project_id, build_test_cases_payload(project_name, drg_cases))
+    replace_agents(project_id, build_agents_payload(project_name, drg_cases, bool(submissions)))
+    replace_messages(project_id, build_messages_payload(project_name, drg_cases))
+    replace_documents(project_id, build_documents_payload(project_name, drg_cases, document_contents))
+    replace_test_cases(project_id, build_test_cases_payload(project_name, drg_cases, test_cases))

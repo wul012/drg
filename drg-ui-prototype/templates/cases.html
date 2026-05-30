@@ -6,7 +6,7 @@
 <header class="topbar">
     <div>
         <h1>DRG规则匹配与病例分析</h1>
-        <p>在这里录入电子病历摘要、主诊断、次诊断和主手术编码，系统会按内置教学规则输出 MDC、ADRG 和 DRG 结果。</p>
+        <p>可以先粘贴电子病历 JSON 摘要并解析到表单，再确认主要诊断、次要诊断、主要手术后执行 CHS-DRG 入组。</p>
     </div>
     <div class="topbar-actions">
         <span class="badge">病例总数：{{ all_case_count }}</span>
@@ -22,39 +22,53 @@
             </div>
             <a class="text-link" href="{{ url_for('analysis') }}">返回需求分析</a>
         </div>
-        <form class="form-grid" method="post">
+        <form class="form-grid" method="post" id="case-entry-form">
             <div class="field">
-                <label for="patient_name">患者姓名</label>
+                <label for="case_json">电子病历摘要 JSON</label>
+                <textarea class="textarea json-textarea" id="case_json" name="case_json" placeholder="粘贴病例 JSON 后点击解析">{{ form_data['case_json'] }}</textarea>
+                <div class="inline-actions">
+                    <button class="button-secondary" type="button" id="parse_case_json">解析 JSON</button>
+                    <span class="form-hint" id="case_json_parse_message"></span>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="patient_name">姓名</label>
                 <input class="input" id="patient_name" name="patient_name" type="text" value="{{ form_data['patient_name'] }}" required />
             </div>
-            <div class="field">
-                <label for="record_text">电子病历摘要</label>
-                <textarea class="textarea" id="record_text" name="record_text" required>{{ form_data['record_text'] }}</textarea>
-            </div>
+
             <div class="form-row two-columns-row">
                 <div class="field">
-                    <label for="primary_diagnosis_code">主诊断编码</label>
-                    <input class="input" id="primary_diagnosis_code" name="primary_diagnosis_code" type="text" value="{{ form_data['primary_diagnosis_code'] }}" placeholder="可留空：已知样例名称会自动补码" />
-                </div>
-                <div class="field">
-                    <label for="primary_diagnosis_name">主诊断名称</label>
+                    <label for="primary_diagnosis_name">主要诊断名称</label>
                     <input class="input" id="primary_diagnosis_name" name="primary_diagnosis_name" type="text" value="{{ form_data['primary_diagnosis_name'] }}" required />
                 </div>
+                <div class="field">
+                    <label for="primary_diagnosis_code">主要诊断编码</label>
+                    <input class="input" id="primary_diagnosis_code" name="primary_diagnosis_code" type="text" value="{{ form_data['primary_diagnosis_code'] }}" required />
+                </div>
             </div>
+
+            <div class="field">
+                <label for="secondary_diagnosis_list">次要诊断列表</label>
+                <textarea class="textarea compact-textarea" id="secondary_diagnosis_list" name="secondary_diagnosis_list" placeholder='例如：[{"疾病名称":"急性呼吸衰竭","疾病编码":"J96.0"}]'>{{ form_data['secondary_diagnosis_list'] }}</textarea>
+            </div>
+
             <div class="form-row two-columns-row">
                 <div class="field">
-                    <label for="secondary_diagnosis_codes">次诊断编码列表</label>
-                    <input class="input" id="secondary_diagnosis_codes" name="secondary_diagnosis_codes" type="text" value="{{ form_data['secondary_diagnosis_codes'] }}" placeholder="例如：J96.0, E87.1" />
+                    <label for="procedure_name">主要手术名称</label>
+                    <input class="input" id="procedure_name" name="procedure_name" type="text" value="{{ form_data['procedure_name'] }}" required />
                 </div>
                 <div class="field">
-                    <label for="procedure_code">主手术编码</label>
-                    <input class="input" id="procedure_code" name="procedure_code" type="text" value="{{ form_data['procedure_code'] }}" placeholder="可留空：已知样例手术会自动补码" />
+                    <label for="procedure_code">主要手术编码</label>
+                    <input class="input" id="procedure_code" name="procedure_code" type="text" value="{{ form_data['procedure_code'] }}" required />
                 </div>
             </div>
+
             <div class="field">
-                <label for="procedure_name">主手术名称</label>
-                <input class="input" id="procedure_name" name="procedure_name" type="text" value="{{ form_data['procedure_name'] }}" required />
+                <label for="other_procedure_list">其他手术列表</label>
+                <textarea class="textarea compact-textarea" id="other_procedure_list" name="other_procedure_list" placeholder='例如：[{"手术名称":"胸腔闭式引流术","手术编码":"34.0401"}]'>{{ form_data['other_procedure_list'] }}</textarea>
             </div>
+
             <div class="form-actions">
                 <button class="button" type="submit">执行DRG入组</button>
                 <a class="button-secondary" href="{{ url_for('tests_page') }}">查看测试覆盖</a>
@@ -80,19 +94,23 @@
                 <div class="info-row"><strong>ADRG</strong><span>{{ latest_case['adrg_code'] }} · {{ latest_case['adrg_name'] }}</span></div>
                 <div class="info-row"><strong>DRG</strong><span>{{ latest_case['drg_code'] }} · {{ latest_case['drg_name'] }}</span></div>
                 <div class="info-row"><strong>并发症层级</strong><span>{{ latest_case['complication_level'] }}</span></div>
-                <div class="info-row"><strong>风险等级</strong><span>{{ latest_case['risk_level'] }}</span></div>
             </div>
             <div class="item-card simple-item-card case-reason-card">
                 <div class="item-card-top wrap-top">
-                    <h4>入组原因说明</h4>
-                    <span class="status-tag">本地微型LLM · {{ local_llm_runtime['label'] }}</span>
+                    <h4>说明</h4>
+                    <span class="status-tag">CHS-DRG</span>
                 </div>
-                <p>{{ latest_case['group_reason'] }}</p>
+                <div class="case-reason-content">
+                    <strong>原因</strong>
+                    {% for line in latest_case['group_reason_lines'] %}
+                        <p>{{ line }}</p>
+                    {% endfor %}
+                </div>
             </div>
         {% elif filter_data['active'] %}
-            <div class="empty-state">当前筛选条件下没有可展示的最新病例结果，请调整筛选项（MDC、风险等级、状态或关键词）后重试。</div>
+            <div class="empty-state">当前筛选条件下没有可展示的最新病例结果，请调整筛选项后重试。</div>
         {% else %}
-            <div class="empty-state">当前还没有病例数据，请先录入一条电子病历进行教学版 DRG 入组。</div>
+            <div class="empty-state">当前还没有病例数据，请先录入一条电子病历进行 CHS-DRG 入组。</div>
         {% endif %}
     </article>
 </section>
@@ -169,10 +187,9 @@
                     <span class="status-tag {% if item['status'] == '已完成' %}success{% elif item['risk_level'] == '高' %}danger{% else %}warning{% endif %}">{{ item['status'] }}</span>
                 </div>
                 <div class="info-list compact-info-list">
-                    <div class="info-row"><strong>分组链路</strong><span>{{ item['mdc_code'] }} → {{ item['adrg_code'] }} → {{ item['drg_code'] }}</span></div>
+                    <div class="info-row"><strong>分组链路</strong><span>{{ item['mdc_code'] }} -> {{ item['adrg_code'] }} -> {{ item['drg_code'] }}</span></div>
                     <div class="info-row"><strong>DRG组名</strong><span>{{ item['drg_name'] }}</span></div>
                     <div class="info-row"><strong>次诊断</strong><span>{{ item['secondary_diagnosis_codes']|join('、') if item['secondary_diagnosis_codes'] else '无' }}</span></div>
-                    <div class="info-row"><strong>风险等级</strong><span>{{ item['risk_level'] }}</span></div>
                     <div class="info-row"><strong>说明</strong><span>{{ item['note'] }}</span></div>
                 </div>
                 {% if can_manage_cases %}

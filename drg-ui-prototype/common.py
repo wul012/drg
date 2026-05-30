@@ -6,7 +6,7 @@ from typing import Any
 
 from flask import has_request_context, session
 
-from local_llm import get_default_generation_mode, normalize_generation_mode
+from template_generation import get_default_generation_mode, normalize_generation_mode
 from platform_config import (
     MAX_PROJECT_NAME_LENGTH,
     MAX_USERNAME_LENGTH,
@@ -14,9 +14,9 @@ from platform_config import (
     MIN_USERNAME_LENGTH,
 )
 
-def get_current_local_llm_mode() -> str:
+def get_current_generation_mode() -> str:
     if has_request_context():
-        return normalize_generation_mode(session.get("local_llm_mode", get_default_generation_mode()))
+        return normalize_generation_mode(session.get("generation_mode", get_default_generation_mode()))
     return get_default_generation_mode()
 
 

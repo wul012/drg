@@ -971,6 +971,44 @@ code {
     resize: vertical;
 }
 
+.json-textarea {
+    min-height: 220px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    line-height: 1.65;
+}
+
+.compact-textarea {
+    min-height: 96px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    line-height: 1.6;
+}
+
+.inline-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.form-hint {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.error-text {
+    color: var(--danger);
+}
+
+.result-json {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--text-soft);
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 13px;
+    line-height: 1.75;
+}
+
 input::placeholder,
 textarea::placeholder {
     color: #8ea0ba;
@@ -1009,6 +1047,21 @@ textarea::placeholder {
 
 .case-reason-card {
     margin-top: 18px;
+}
+
+.case-reason-content {
+    display: grid;
+    gap: 8px;
+    color: var(--text-soft);
+    line-height: 1.8;
+}
+
+.case-reason-content strong {
+    color: var(--text);
+}
+
+.case-reason-content p {
+    margin: 0;
 }
 
 .case-action-row {
@@ -1224,6 +1277,22 @@ textarea::placeholder {
     background: rgba(37, 99, 235, 0.05);
 }
 
+.test-case-json {
+    max-height: 360px;
+    min-width: 360px;
+    margin: 0;
+    padding: 12px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #f8fbff;
+    color: var(--text-soft);
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
 .step-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1378,6 +1447,34 @@ textarea::placeholder {
     background: rgba(255, 255, 255, 0.7);
     color: var(--text-soft);
     text-align: center;
+}
+
+.analysis-document-text {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font: inherit;
+    line-height: 1.75;
+    color: var(--text-main);
+}
+
+.analysis-test-case-list {
+    display: grid;
+    gap: 12px;
+}
+
+.analysis-test-case {
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(248, 251, 255, 0.9);
+    border: 1px solid var(--border);
+}
+
+.analysis-test-case p {
+    margin: 8px 0 0;
+    white-space: pre-wrap;
+    line-height: 1.7;
+    color: var(--text-soft);
 }
 
 @media (max-width: 1180px) {

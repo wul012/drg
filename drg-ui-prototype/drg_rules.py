@@ -1,183 +1,20 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
-from common import dumps, get_current_local_llm_mode, now_str
-from local_llm import generate_drg_reason
+from common import dumps, get_current_generation_mode, now_str
+from template_generation import generate_drg_reason
+from platform_config import BASE_DIR
 
-SIMPLIFIED_MDC_RULES = [
-    {
-        "mdc_code": "MDCB",
-        "mdc_name": "神经系统疾病及功能障碍大类",
-        "diagnosis_prefixes": ["G01", "I60", "I61", "I63", "A01.002"],
-    },
-    {
-        "mdc_code": "MDCA",
-        "mdc_name": "呼吸系统疾病大类",
-        "diagnosis_prefixes": ["J18", "J44", "J96", "J12"],
-    },
-    {
-        "mdc_code": "MDCD",
-        "mdc_name": "消化系统疾病大类",
-        "diagnosis_prefixes": ["K35", "K36", "K80", "K81"],
-    },
-    {
-        "mdc_code": "MDCG",
-        "mdc_name": "消化道疾病及功能障碍",
-        "diagnosis_prefixes": ["C16"],
-    },
-    {
-        "mdc_code": "MDCH",
-        "mdc_name": "肝、胆、胰疾病及功能障碍",
-        "diagnosis_prefixes": ["K83"],
-    },
-    {
-        "mdc_code": "MDCF",
-        "mdc_name": "内分泌与代谢系统疾病大类",
-        "diagnosis_prefixes": ["E10", "E11", "E14", "L97"],
-    },
-    {
-        "mdc_code": "MDCE",
-        "mdc_name": "循环系统疾病大类",
-        "diagnosis_prefixes": ["I20", "I21", "I25", "I50"],
-    },
-    {
-        "mdc_code": "MDCL",
-        "mdc_name": "泌尿系统疾病大类",
-        "diagnosis_prefixes": ["N17", "N18", "N20", "N39"],
-    },
-]
-SIMPLIFIED_ADRG_RULES = {
-    "MDCB": [
-        {
-            "adrg_code": "BB1",
-            "adrg_name": "神经系统复杂手术组",
-            "procedure_prefixes": ["38.1000", "01.24", "01.59"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "BZ1",
-            "adrg_name": "神经系统内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCA": [
-        {
-            "adrg_code": "AB1",
-            "adrg_name": "呼吸系统手术组",
-            "procedure_prefixes": ["33.22", "32.50"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "AZ1",
-            "adrg_name": "呼吸系统内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCD": [
-        {
-            "adrg_code": "GD1",
-            "adrg_name": "阑尾切除术组",
-            "procedure_prefixes": ["47.0", "47.09", "47.1"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "GZ1",
-            "adrg_name": "消化系统内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCG": [
-        {
-            "adrg_code": "GB2",
-            "adrg_name": "胃、十二指肠大手术组",
-            "procedure_prefixes": ["43.7"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "GZ2",
-            "adrg_name": "消化道内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCH": [
-        {
-            "adrg_code": "HC1",
-            "adrg_name": "胆总管手术组",
-            "procedure_prefixes": ["51.63"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "HZ1",
-            "adrg_name": "肝胆胰内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCF": [
-        {
-            "adrg_code": "KD1",
-            "adrg_name": "糖尿病足手术组",
-            "procedure_prefixes": ["86.2200", "86.22"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "KZ1",
-            "adrg_name": "代谢系统内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCE": [
-        {
-            "adrg_code": "EC2",
-            "adrg_name": "纵隔、气管、胸壁其他手术组",
-            "procedure_prefixes": ["34.82"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "FB1",
-            "adrg_name": "冠状动脉搭桥手术组",
-            "procedure_prefixes": ["36.10", "36.11", "36.12", "36.15"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "FZ1",
-            "adrg_name": "循环系统内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-    "MDCL": [
-        {
-            "adrg_code": "LB1",
-            "adrg_name": "肾与尿道手术组",
-            "procedure_prefixes": ["55.01", "55.04", "56.0", "56.1"],
-            "supports_complication": True,
-        },
-        {
-            "adrg_code": "LZ1",
-            "adrg_name": "泌尿系统内科治疗组",
-            "procedure_prefixes": [],
-            "supports_complication": True,
-        },
-    ],
-}
-SIMPLIFIED_MCC_CODES = {"J96", "I50", "N17", "R57", "A41"}
-SIMPLIFIED_CC_CODES = {"E87", "D64", "I10", "N39", "J18"}
-SIMPLIFIED_CC_EXACT_CODES = {"K66.002"}
-SIMPLIFIED_EXCLUDED_CC_MCC = {"Z00", "Z01"}
-SPECIAL_MDC_BY_PRIMARY_CODE = {
-    "J86.000X013": {
-        "mdc_code": "MDCE",
-        "mdc_name": "呼吸系统疾病及功能障碍",
-    },
-}
+CHS_DRG_RULES_DIR = BASE_DIR / "CHS_DRG_20"
+NO_CC_MCC_LEVEL = "无CC/MCC"
+DRG_SUFFIX_BY_LEVEL = {"MCC": "1", "CC": "3", NO_CC_MCC_LEVEL: "5"}
+
+# These maps only help demo JSON files that omit codes. DRG grouping itself is
+# driven exclusively by CHS_DRG_20 rule files below.
 DIAGNOSIS_NAME_CODE_MAP = {
     "胃窦恶性肿瘤": "C16.301",
     "肠粘连": "K66.002",
@@ -198,15 +35,130 @@ PROCEDURE_NAME_CODE_MAP = {
     "膈肌缝合术": "34.8200X002",
     "胆总管切除术": "51.6303",
 }
-DRG_CODE_OVERRIDES = {
-    ("GB2", "CC"): "GB29",
-    ("EC2", "CC"): "EC29",
-    ("HC1", "无CC/MCC"): "HC15",
-}
+
+
+def canonical_medical_code(value: str) -> str:
+    return re.sub(r"\s+", "", (value or "").strip().upper())
+
+
+def medical_code_variants(value: str) -> list[str]:
+    code = canonical_medical_code(value)
+    if not code:
+        return []
+    variants = [code]
+    if code.endswith("*"):
+        variants.append(code[:-1])
+    elif "+" in code:
+        variants.append(f"{code}*")
+    if re.fullmatch(r"[A-Z]\d{2}\.\d", code):
+        variants.append(f"{code}00")
+    if re.fullmatch(r"[A-Z]\d{2}\.\d{2}", code):
+        variants.append(f"{code}0")
+    if re.fullmatch(r"[A-Z]\d{2}\.\d{3}", code) and code.endswith("0"):
+        variants.append(code[:-1])
+    return list(dict.fromkeys(variants))
+
+
+def parse_rule_line(line: str) -> tuple[str, str] | None:
+    stripped = line.strip()
+    if not stripped or " " not in stripped:
+        return None
+    code, name = stripped.split(maxsplit=1)
+    if not re.match(r"^[A-Z0-9]", code, re.IGNORECASE):
+        return None
+    return canonical_medical_code(code), name.strip()
+
+
+def read_rule_lines(path: Path) -> list[tuple[str, str]]:
+    if not path.exists():
+        return []
+    rows: list[tuple[str, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parsed = parse_rule_line(line)
+        if parsed is not None:
+            rows.append(parsed)
+    return rows
+
+
+@lru_cache(maxsize=1)
+def load_chs_rules() -> dict[str, Any]:
+    if not CHS_DRG_RULES_DIR.exists():
+        return {"available": False}
+
+    mdc_names = dict(read_rule_lines(CHS_DRG_RULES_DIR / "MDC.dat"))
+    adrg_names = dict(read_rule_lines(CHS_DRG_RULES_DIR / "ADRG.dat"))
+    drg_names = dict(read_rule_lines(CHS_DRG_RULES_DIR / "DRG.dat"))
+    mcc_groups = dict(read_rule_lines(CHS_DRG_RULES_DIR / "MCC.dat"))
+    cc_groups = dict(read_rule_lines(CHS_DRG_RULES_DIR / "CC.dat"))
+    cce_groups = dict(read_rule_lines(CHS_DRG_RULES_DIR / "CCE.dat"))
+
+    mdc_diagnoses: dict[str, dict[str, str]] = {}
+    for path in (CHS_DRG_RULES_DIR / "MDC").glob("*.dat"):
+        mdc_code = canonical_medical_code(path.name.split("_", 1)[0])
+        for diagnosis_code, diagnosis_name in read_rule_lines(path):
+            mdc_diagnoses[diagnosis_code] = {
+                "mdc_code": mdc_code,
+                "mdc_name": mdc_names.get(mdc_code, path.stem.split("_", 1)[-1]),
+                "matched_code": diagnosis_code,
+                "diagnosis_name": diagnosis_name,
+            }
+
+    adrg_procedures: dict[str, list[dict[str, str]]] = {}
+    for path in (CHS_DRG_RULES_DIR / "ADRG").glob("*.dat"):
+        adrg_code = canonical_medical_code(path.name.split("_", 1)[0])
+        adrg_name = adrg_names.get(adrg_code, path.stem.split("_", 1)[-1])
+        for procedure_code, procedure_name in read_rule_lines(path):
+            adrg_procedures.setdefault(procedure_code, []).append(
+                {
+                    "adrg_code": adrg_code,
+                    "adrg_name": adrg_name,
+                    "procedure_code": procedure_code,
+                    "procedure_name": procedure_name,
+                }
+            )
+
+    return {
+        "available": True,
+        "mdc_names": mdc_names,
+        "adrg_names": adrg_names,
+        "drg_names": drg_names,
+        "mcc_groups": mcc_groups,
+        "cc_groups": cc_groups,
+        "cce_groups": cce_groups,
+        "mdc_diagnoses": mdc_diagnoses,
+        "adrg_procedures": adrg_procedures,
+    }
+
+
+def get_chs_mdc_catalog() -> list[dict[str, str]]:
+    rules = load_chs_rules()
+    return [
+        {"mdc_code": code, "mdc_name": name}
+        for code, name in sorted(rules.get("mdc_names", {}).items())
+    ]
+
+
+def lookup_code(mapping: dict[str, Any], code: str) -> Any | None:
+    for variant in medical_code_variants(code):
+        if variant in mapping:
+            return mapping[variant]
+    return None
+
+
+def lookup_code_with_prefix(mapping: dict[str, Any], code: str) -> Any | None:
+    result = lookup_code(mapping, code)
+    if result is not None:
+        return result
+    variants = medical_code_variants(code)
+    for variant in variants:
+        for indexed_code, indexed_value in mapping.items():
+            if indexed_code.startswith(variant):
+                return indexed_value
+    return None
 
 
 def normalize_medical_code(value: str) -> str:
-    return value.strip().upper()
+    return canonical_medical_code(value)
 
 
 def resolve_diagnosis_code(name: str, code: str | None = None) -> str:
@@ -237,95 +189,112 @@ def parse_code_list(raw_text: str) -> list[str]:
 def tokenize_medical_code(value: str) -> list[str]:
     if not value:
         return []
-    return [normalize_medical_code(item) for item in re.split(r"[+＋/、,，\s]+", value) if item.strip()]
+    return [normalize_medical_code(item) for item in re.split(r"[+，、;\s]+", value) if item.strip()]
 
 
 def match_mdc(primary_diagnosis_code: str) -> dict[str, str]:
-    tokens = tokenize_medical_code(primary_diagnosis_code)
-    for token in tokens:
-        special_rule = SPECIAL_MDC_BY_PRIMARY_CODE.get(token)
-        if special_rule is not None:
-            return {
-                "mdc_code": special_rule["mdc_code"],
-                "mdc_name": special_rule["mdc_name"],
-                "matched_code": token,
-            }
-    for rule in SIMPLIFIED_MDC_RULES:
-        for prefix in rule["diagnosis_prefixes"]:
-            matched_token = next((token for token in tokens if token.startswith(prefix)), None)
-            if matched_token:
-                return {
-                    "mdc_code": rule["mdc_code"],
-                    "mdc_name": rule["mdc_name"],
-                    "matched_code": matched_token,
-                }
-    return {"mdc_code": "MDCQ", "mdc_name": "未细分教学演示大类", "matched_code": normalize_medical_code(primary_diagnosis_code)}
+    rules = load_chs_rules()
+    diagnosis_map = rules.get("mdc_diagnoses", {})
+    for candidate in [primary_diagnosis_code, *tokenize_medical_code(primary_diagnosis_code)]:
+        result = lookup_code_with_prefix(diagnosis_map, candidate)
+        if result is not None:
+            return result
+    return {
+        "mdc_code": "MDCQ",
+        "mdc_name": "未命中CHS-DRG主要诊断大类",
+        "matched_code": normalize_medical_code(primary_diagnosis_code),
+    }
 
 
 def match_adrg(mdc_code: str, procedure_code: str) -> dict[str, Any]:
     normalized_code = normalize_medical_code(procedure_code)
-    fallback_rule = None
-    for rule in SIMPLIFIED_ADRG_RULES.get(mdc_code, []):
-        prefixes = rule["procedure_prefixes"]
-        if not prefixes:
-            fallback_rule = rule
-            continue
-        if any(normalized_code.startswith(prefix) for prefix in prefixes):
-            return {**rule, "matched": True, "matched_procedure": normalized_code}
-    if fallback_rule is not None:
-        return {**fallback_rule, "matched": bool(normalized_code), "matched_procedure": normalized_code or "未提供主手术编码"}
+    rules = load_chs_rules()
+    procedure_map = rules.get("adrg_procedures", {})
+    expected_prefix = mdc_code.replace("MDC", "")[:1]
+    for variant in medical_code_variants(normalized_code):
+        candidates = procedure_map.get(variant, [])
+        if not candidates:
+            candidates = [
+                rule
+                for indexed_code, rules_for_code in procedure_map.items()
+                if indexed_code.startswith(variant)
+                for rule in rules_for_code
+            ]
+        for rule in candidates:
+            if not expected_prefix or rule["adrg_code"].startswith(expected_prefix):
+                return {
+                    "adrg_code": rule["adrg_code"],
+                    "adrg_name": rule["adrg_name"],
+                    "procedure_prefixes": [rule["procedure_code"]],
+                    "supports_complication": True,
+                    "matched": True,
+                    "matched_procedure": rule["procedure_code"],
+                }
     return {
         "adrg_code": "QZ1",
-        "adrg_name": "未细分教学演示组",
+        "adrg_name": "未命中CHS-DRG核心分组",
         "procedure_prefixes": [],
-        "supports_complication": True,
+        "supports_complication": False,
         "matched": False,
         "matched_procedure": normalized_code or "未提供主手术编码",
     }
 
 
+def is_chs_complication_excluded(primary_diagnosis_code: str, secondary_code: str, cce_groups: dict[str, str]) -> bool:
+    secondary_group = lookup_code(cce_groups, secondary_code)
+    if not secondary_group:
+        return False
+    for primary_candidate in [primary_diagnosis_code, *tokenize_medical_code(primary_diagnosis_code)]:
+        primary_group = lookup_code(cce_groups, primary_candidate)
+        if primary_group and primary_group == secondary_group:
+            return True
+    return False
+
+
 def detect_complication_level(primary_diagnosis_code: str, secondary_codes: list[str]) -> dict[str, str]:
-    primary_tokens = tokenize_medical_code(primary_diagnosis_code)
+    rules = load_chs_rules()
     cc_result = None
     for raw_code in secondary_codes:
         normalized_code = normalize_medical_code(raw_code)
-        if not normalized_code or normalized_code in SIMPLIFIED_EXCLUDED_CC_MCC:
+        if not normalized_code:
             continue
-        if any(normalized_code.startswith(token[:3]) for token in primary_tokens if len(token) >= 3):
+        if is_chs_complication_excluded(primary_diagnosis_code, normalized_code, rules.get("cce_groups", {})):
             continue
-        if any(normalized_code.startswith(prefix) for prefix in SIMPLIFIED_MCC_CODES):
+        if lookup_code(rules.get("mcc_groups", {}), normalized_code):
             return {
                 "level": "MCC",
                 "matched_code": normalized_code,
-                "reason": f"次诊断 {normalized_code} 命中教学版 MCC 列表。",
+                "reason": f"次诊断 {normalized_code} 命中 CHS-DRG MCC 列表，排除表校验未排除。",
             }
-        if cc_result is None and (normalized_code in SIMPLIFIED_CC_EXACT_CODES or any(normalized_code.startswith(prefix) for prefix in SIMPLIFIED_CC_CODES)):
+        if cc_result is None and lookup_code(rules.get("cc_groups", {}), normalized_code):
             cc_result = {
                 "level": "CC",
                 "matched_code": normalized_code,
-                "reason": f"次诊断 {normalized_code} 命中教学版 CC 列表。",
+                "reason": f"次诊断 {normalized_code} 命中 CHS-DRG CC 列表，排除表校验未排除。",
             }
     if cc_result is not None:
         return cc_result
-    return {"level": "无CC/MCC", "matched_code": "", "reason": "未发现有效的 CC/MCC 次诊断。"}
+    return {"level": NO_CC_MCC_LEVEL, "matched_code": "", "reason": "未发现有效的 CC/MCC 次诊断，或已被排除表排除。"}
 
 
 def build_drg_name(adrg_name: str, complication_level: str) -> str:
-    base_name = adrg_name[:-1] if adrg_name.endswith("组") else adrg_name
     suffix = {
         "MCC": "，伴严重合并症或并发症",
         "CC": "，伴一般合并症或并发症",
-        "无CC/MCC": "，无合并症或并发症",
+        NO_CC_MCC_LEVEL: "，无合并症或并发症",
     }.get(complication_level, "，需复核")
-    return f"{base_name}{suffix}"
+    return f"{adrg_name}{suffix}"
 
 
 def build_drg_code(adrg_code: str, complication_level: str) -> str:
-    override = DRG_CODE_OVERRIDES.get((adrg_code, complication_level))
-    if override:
-        return override
-    suffix = {"MCC": "1", "CC": "3", "无CC/MCC": "5"}.get(complication_level, "9")
-    return f"{adrg_code}{suffix}"
+    rules = load_chs_rules()
+    drg_names = rules.get("drg_names", {})
+    preferred_suffix = DRG_SUFFIX_BY_LEVEL.get(complication_level, "9")
+    for suffix in [preferred_suffix, "9", "5", "3", "1"]:
+        candidate = f"{adrg_code}{suffix}"
+        if candidate in drg_names:
+            return candidate
+    return f"{adrg_code}{preferred_suffix}"
 
 
 def group_drg_case(
@@ -340,8 +309,9 @@ def group_drg_case(
     adrg_result = match_adrg(mdc_result["mdc_code"], procedure_code)
     complication_result = detect_complication_level(primary_diagnosis_code, secondary_codes)
     drg_code = build_drg_code(adrg_result["adrg_code"], complication_result["level"])
-    drg_name = build_drg_name(adrg_result["adrg_name"], complication_result["level"])
-    status = "已完成" if mdc_result["mdc_code"] != "MDCQ" and adrg_result["adrg_code"] != "QZ1" else "需复核"
+    rules = load_chs_rules()
+    drg_name = rules.get("drg_names", {}).get(drg_code, build_drg_name(adrg_result["adrg_name"], complication_result["level"]))
+    status = "已完成" if mdc_result["mdc_code"] != "MDCQ" and adrg_result["adrg_code"] != "QZ1" and drg_code in rules.get("drg_names", {}) else "需复核"
     risk_level = "高" if complication_result["level"] == "MCC" or status == "需复核" else "中" if complication_result["level"] == "CC" else "低"
     group_reason = generate_drg_reason(
         primary_diagnosis_code,
@@ -359,7 +329,7 @@ def group_drg_case(
         risk_level,
         status,
         raw_record,
-        mode=get_current_local_llm_mode(),
+        mode=get_current_generation_mode(),
     )
     return {
         "mdc_code": mdc_result["mdc_code"],

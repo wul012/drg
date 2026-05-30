@@ -6,11 +6,11 @@
 <header class="topbar">
     <div>
         <h1>项目需求分析</h1>
-        <p>这里会把项目需求真正写入数据库，并联动更新文档、Agent与测试中心，同时驱动本地微型LLM生成结果刷新。</p>
+        <p>这里会把系统需求、代码和设计信息写入数据库，并联动生成需求分析、架构设计与测试文档。</p>
     </div>
     <div class="topbar-actions">
         <span class="badge">主流程第一站</span>
-        <span class="badge">本地微型LLM · {{ local_llm_runtime['label'] }}</span>
+        <span class="badge">大模型生成</span>
     </div>
 </header>
 
@@ -19,44 +19,33 @@
         <div class="panel-header">
             <h3>需求录入区</h3>
         </div>
-        <form class="form-grid" method="post">
+        <form class="form-grid" id="analysis_form" method="post">
             <div class="field">
                 <label for="project_name">项目名称</label>
                 <input class="input" id="project_name" name="project_name" type="text" value="{{ form_data['project_name'] }}" required />
             </div>
             <div class="field">
-                <label for="description">业务描述</label>
+                <label for="description">系统需求</label>
                 <textarea class="textarea" id="description" name="description" required>{{ form_data['description'] }}</textarea>
+            </div>
+            <div class="field">
+                <label for="system_code">系统代码</label>
+                <textarea class="textarea" id="system_code" name="system_code">{{ form_data['system_code'] }}</textarea>
+            </div>
+            <div class="field">
+                <label for="design_info">设计信息</label>
+                <textarea class="textarea" id="design_info" name="design_info">{{ form_data['design_info'] }}</textarea>
             </div>
             <div class="field">
                 <label for="target">目标产物</label>
                 <textarea class="textarea" id="target" name="target" required>{{ form_data['target'] }}</textarea>
             </div>
-            <div class="form-row two-columns-row">
-                <div class="field">
-                    <label for="priority">优先级</label>
-                    <select class="input" id="priority" name="priority">
-                        <option value="高" {% if form_data['priority'] == '高' %}selected{% endif %}>高</option>
-                        <option value="中" {% if form_data['priority'] == '中' %}selected{% endif %}>中</option>
-                        <option value="低" {% if form_data['priority'] == '低' %}selected{% endif %}>低</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label for="doc_type">目标文档类型</label>
-                    <select class="input" id="doc_type" name="doc_type">
-                        <option value="需求分析文档" {% if form_data['doc_type'] == '需求分析文档' %}selected{% endif %}>需求分析文档</option>
-                        <option value="架构设计文档" {% if form_data['doc_type'] == '架构设计文档' %}selected{% endif %}>架构设计文档</option>
-                        <option value="测试用例文档" {% if form_data['doc_type'] == '测试用例文档' %}selected{% endif %}>测试用例文档</option>
-                        <option value="完整提交包" {% if form_data['doc_type'] == '完整提交包' %}selected{% endif %}>完整提交包</option>
-                    </select>
-                </div>
-            </div>
             <div class="field">
-                <label for="llm_mode">本地生成模式</label>
-                <select class="input" id="llm_mode" name="llm_mode">
-                    {% for option in local_llm_mode_options %}
-                        <option value="{{ option['value'] }}" {% if form_data['llm_mode'] == option['value'] %}selected{% endif %}>{{ option['label'] }}</option>
-                    {% endfor %}
+                <label for="priority">优先级</label>
+                <select class="input" id="priority" name="priority">
+                    <option value="高" {% if form_data['priority'] == '高' %}selected{% endif %}>高</option>
+                    <option value="中" {% if form_data['priority'] == '中' %}selected{% endif %}>中</option>
+                    <option value="低" {% if form_data['priority'] == '低' %}selected{% endif %}>低</option>
                 </select>
             </div>
             <div class="form-actions">
@@ -69,45 +58,8 @@
     <article class="panel analysis-result-panel">
         <div class="panel-header analysis-panel-header">
             <h3>分析结果区</h3>
-            <div class="panel-header-actions">
-                <span class="status-tag analysis-status-tag">更新时间：{{ analysis['updated_at'] }}</span>
-                <span class="status-tag analysis-status-tag">{{ local_llm_runtime['label'] }}</span>
-            </div>
         </div>
-        <div class="result-grid analysis-result-grid">
-            <div class="item-card analysis-result-card analysis-summary-card">
-                <h4>需求摘要</h4>
-                <ul class="data-list">
-                    {% for item in analysis['summary'] %}
-                        <li>{{ item }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div class="item-card analysis-result-card">
-                <h4>模块建议</h4>
-                <ul class="data-list">
-                    {% for item in analysis['modules'] %}
-                        <li>{{ item }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div class="item-card analysis-result-card">
-                <h4>风险识别</h4>
-                <ul class="data-list">
-                    {% for item in analysis['risks'] %}
-                        <li>{{ item }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div class="item-card analysis-result-card analysis-recommendation-card">
-                <h4>推荐动作</h4>
-                <ul class="data-list">
-                    {% for item in analysis['recommendations'] %}
-                        <li>{{ item }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
+        <div class="result-grid analysis-result-grid" id="analysis_result"></div>
     </article>
 </section>
 {% endblock %}
